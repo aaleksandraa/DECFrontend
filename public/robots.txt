@@ -1,0 +1,26 @@
+# Frizerino - robots.txt
+# https://frizerino.com
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://frizerino.com/sitemap.xml
+
+# Crawl delay (optional)
+Crawl-delay: 1
+
+# Disallow admin and private routes
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api/
+
+# Allow public routes
+Allow: /salon/
+Allow: /saloni/
+Allow: /pretraga
+Allow: /kontakt
+Allow: /pomoc/
+Allow: /politika-privatnosti
+Allow: /uslovi-koristenja
+Allow: /pretraga
