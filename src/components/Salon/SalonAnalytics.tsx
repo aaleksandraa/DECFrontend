@@ -36,6 +36,13 @@ export function SalonAnalytics() {
   const isStaff = user?.role === 'frizer';
   const salonId = user?.salon?.id || user?.staff_profile?.salon_id;
 
+  const formatDateForInput = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   useEffect(() => {
     loadStaff();
   }, [user]);
@@ -268,6 +275,10 @@ export function SalonAnalytics() {
 
   const applyCustomDates = () => {
     if (customDateStart && customDateEnd) {
+      if (customDateStart > customDateEnd) {
+        setCustomDateStart(customDateEnd);
+        setCustomDateEnd(customDateStart);
+      }
       setSelectedPeriod('custom');
       setShowCustomPicker(false);
     }
@@ -442,8 +453,8 @@ export function SalonAnalytics() {
                 <button
                   onClick={() => {
                     const now = new Date();
-                    setCustomDateStart(new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().split('T')[0]);
-                    setCustomDateEnd(now.toISOString().split('T')[0]);
+                    setCustomDateStart(formatDateForInput(new Date(now.getFullYear(), now.getMonth() - 3, 1)));
+                    setCustomDateEnd(formatDateForInput(now));
                   }}
                   className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
                 >
@@ -452,8 +463,8 @@ export function SalonAnalytics() {
                 <button
                   onClick={() => {
                     const now = new Date();
-                    setCustomDateStart(new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString().split('T')[0]);
-                    setCustomDateEnd(now.toISOString().split('T')[0]);
+                    setCustomDateStart(formatDateForInput(new Date(now.getFullYear(), now.getMonth() - 6, 1)));
+                    setCustomDateEnd(formatDateForInput(now));
                   }}
                   className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
                 >

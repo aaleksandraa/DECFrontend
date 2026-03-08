@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ScissorsIcon } from '@heroicons/react/24/outline';
+import { openCookieSettings } from '../../utils/cookieConsent';
 
 export const PublicFooter: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -166,6 +167,9 @@ export const PublicFooter: React.FC = () => {
               <Link to="/kontakt" className="hover:text-orange-500">Kontakt</Link>
               <Link to="/uslovi-koristenja" className="hover:text-orange-500">Uslovi korištenja</Link>
               <Link to="/politika-privatnosti" className="hover:text-orange-500">Politika privatnosti</Link>
+              <button type="button" onClick={openCookieSettings} className="hover:text-orange-500">
+                Postavke kolačića
+              </button>
             </div>
           </div>
         </div>

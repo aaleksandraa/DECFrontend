@@ -125,22 +125,42 @@ export const CityPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Check if citySlug is actually a category (for routes like /saloni/kozmeticari)
-  const isCategoryOnly = useMemo(() => 
-    citySlug ? (serviceCategories[citySlug] !== undefined && !categorySlug) : false,
+  // Category route variants:
+  // 1) /saloni/pedikir
+  // 2) /saloni/kozmeticari/pedikir (legacy nested-category URL)
+  const isCategoryOnly = useMemo(
+    () => (citySlug ? serviceCategories[citySlug] !== undefined && !categorySlug : false),
     [citySlug, categorySlug]
   );
-  
-  // Get current category info
-  const currentCategory = useMemo(() => {
+
+  const isNestedCategoryRoute = useMemo(
+    () =>
+      citySlug
+        ? serviceCategories[citySlug] !== undefined &&
+          Boolean(categorySlug) &&
+          Boolean(categorySlug && serviceCategories[categorySlug])
+        : false,
+    [citySlug, categorySlug]
+  );
+
+  const currentCategorySlug = useMemo(() => {
     if (isCategoryOnly && citySlug) {
-      return serviceCategories[citySlug];
+      return citySlug;
     }
-    if (categorySlug) {
-      return serviceCategories[categorySlug];
+    if (isNestedCategoryRoute && categorySlug) {
+      return categorySlug;
+    }
+    if (categorySlug && serviceCategories[categorySlug]) {
+      return categorySlug;
     }
     return null;
-  }, [isCategoryOnly, citySlug, categorySlug]);
+  }, [isCategoryOnly, isNestedCategoryRoute, citySlug, categorySlug]);
+
+  // Get current category info
+  const currentCategory = useMemo(
+    () => (currentCategorySlug ? serviceCategories[currentCategorySlug] : null),
+    [currentCategorySlug]
+  );
   
   // View mode: list or map
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
@@ -180,6 +200,10 @@ export const CityPage: React.FC = () => {
       try {
         // Check if citySlug is actually a category
         const isCategoryRoute = serviceCategories[citySlug] !== undefined && !categorySlug;
+        const isCategoryNestedRoute =
+          serviceCategories[citySlug] !== undefined &&
+          Boolean(categorySlug) &&
+          Boolean(categorySlug && serviceCategories[categorySlug]);
         
         // If category-only (no city), search all salons with that service
         if (isCategoryRoute) {
@@ -198,6 +222,26 @@ export const CityPage: React.FC = () => {
             description: `${category.description} Pronađite najbolje ${category.name.toLowerCase()} salone u Bosni i Hercegovini. Online zakazivanje termina.`,
             keywords: category.keywords,
             canonical: `/saloni/${citySlug}`
+          });
+          setSchema(null);
+        }
+        // Nested category route (e.g. /saloni/kozmeticari/pedikir) - treat as category-only
+        else if (isCategoryNestedRoute && categorySlug) {
+          const category = serviceCategories[categorySlug];
+
+          const searchData = await publicAPI.searchSalons({
+            service: category.name,
+            per_page: 50
+          });
+
+          setCity(null);
+          setSalons(searchData.salons?.data || searchData.salons || []);
+
+          setMeta({
+            title: `${category.name} - ${category.description} | Frizerino`,
+            description: `${category.description} PronaÄ‘ite najbolje ${category.name.toLowerCase()} salone u Bosni i Hercegovini. Online zakazivanje termina.`,
+            keywords: category.keywords,
+            canonical: `/saloni/${categorySlug}`
           });
           setSchema(null);
         }
@@ -552,9 +596,9 @@ export const CityPage: React.FC = () => {
                 {Object.entries(serviceCategories).map(([slug, cat]) => (
                   <Link
                     key={slug}
-                    to={`/saloni/${citySlug}/${slug}`}
+                    to={city ? `/saloni/${citySlug}/${slug}` : `/saloni/${slug}`}
                     className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                      categorySlug === slug 
+                      currentCategorySlug === slug 
                         ? 'bg-orange-500 text-white' 
                         : 'bg-gray-100 text-gray-700 hover:bg-orange-100 hover:text-orange-600'
                     }`}
@@ -900,16 +944,16 @@ export const CityPage: React.FC = () => {
           {currentCategory && (
             <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Druge kategorije u {city?.name}
+                {city ? `Druge kategorije u ${city.name}` : 'Druge kategorije'}
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {Object.entries(serviceCategories)
-                  .filter(([slug]) => slug !== categorySlug)
+                  .filter(([slug]) => slug !== currentCategorySlug)
                   .slice(0, 4)
                   .map(([slug, category]) => (
                     <Link
                       key={slug}
-                      to={`/saloni/${citySlug}/${slug}`}
+                      to={city ? `/saloni/${citySlug}/${slug}` : `/saloni/${slug}`}
                       className="p-4 rounded-lg border border-gray-200 hover:border-orange-300 hover:shadow-md transition-all text-center group"
                     >
                       <span className="text-3xl">{category.icon}</span>

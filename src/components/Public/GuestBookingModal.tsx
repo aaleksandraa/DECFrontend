@@ -79,7 +79,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
   
 
   
-  // Step management: 0=choice (guest only, skip on widget), 1=services, 2=staff, 3=date, 4=time, 5=guest-info (guest only), 6=confirmation
+  // Step management: 0=choice (guest only, skip on widget), 1=services, 2=staff, 3=date+time, 4=guest-info (guest only)
   // On widget, always start at step 1 (skip choice screen)
   const [step, setStep] = useState(user ? 1 : (isWidget ? 1 : 0));
   const [loading, setLoading] = useState(false);
@@ -108,6 +108,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
   // Track dates with available slots
   const [datesWithSlots, setDatesWithSlots] = useState<Set<string>>(new Set());
   const [loadingDates, setLoadingDates] = useState(false);
+  const [hasReliableDatesData, setHasReliableDatesData] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [capacityData, setCapacityData] = useState<Map<string, any>>(new Map());
 
@@ -139,6 +140,8 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
       setSelectedTime('');
       setNotes('');
       setAvailableSlots([]);
+      setDatesWithSlots(new Set());
+      setHasReliableDatesData(false);
       setSelectedStaffId(preselectedStaff?.id ? String(preselectedStaff.id) : '');
       
       // Initialize services
@@ -192,6 +195,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
   useEffect(() => {
     if (selectedStaffId && selectedServices[0]?.id && step === 3) {
       setDatesWithSlots(new Set()); // Reset before loading
+      setHasReliableDatesData(false);
       loadDatesWithSlots();
     }
   }, [selectedStaffId, selectedServices, step, currentMonth]);
@@ -203,6 +207,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
     
     setLoadingDates(true);
     setLoadingProgress(0);
+    setHasReliableDatesData(false);
     try {
       // Current time for filtering today's slots
       const now = new Date();
@@ -296,10 +301,12 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
         
         setLoadingProgress(100);
         setDatesWithSlots(datesSet);
+        setHasReliableDatesData(true);
       } catch (err: any) {
         // Fallback: if the optimized endpoint fails, dates will remain empty
-        // User can still click on dates and see if slots are available
+        // User can still click on dates and check slots directly.
         setDatesWithSlots(new Set());
+        setHasReliableDatesData(false);
       }
     } catch (err) {
       // Silently handle errors
@@ -456,6 +463,13 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
     }, 0);
   };
 
+  const formatDateToISO = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Check if a date is available (not on vacation, not a closed day)
   const isDateAvailable = (date: Date): { available: boolean; reason?: string } => {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -527,20 +541,21 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
   // Helper to parse date from dd.mm.yyyy or yyyy-mm-dd format
   const parseDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
+    const normalized = dateStr.trim().replace(/\.$/, '');
     
     // Try dd.mm.yyyy format
-    if (dateStr.includes('.')) {
-      const [day, month, year] = dateStr.split('.').map(Number);
+    if (normalized.includes('.')) {
+      const [day, month, year] = normalized.split('.').map(Number);
       if (day && month && year) {
         return new Date(year, month - 1, day);
       }
     }
     
     // Try yyyy-mm-dd format
-    if (dateStr.includes('-')) {
-      const parsed = new Date(dateStr);
-      if (!isNaN(parsed.getTime())) {
-        return parsed;
+    if (normalized.includes('-')) {
+      const [year, month, day] = normalized.split('-').map(Number);
+      if (year && month && day) {
+        return new Date(year, month - 1, day);
       }
     }
     
@@ -599,9 +614,8 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
         return canGo;
       }
       case 2: return !!selectedStaffId;
-      case 3: return !!selectedDate;
-      case 4: return !!selectedTime;
-      case 5: return guestData.guest_name && guestData.guest_phone;
+      case 3: return !!selectedDate && !!selectedTime;
+      case 4: return guestData.guest_name && guestData.guest_phone;
       default: return false;
     }
   };
@@ -641,12 +655,11 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
         setError('Molimo izaberite datum');
         return;
       }
-    } else if (step === 4) {
       if (!selectedTime) {
         setError('Molimo izaberite vrijeme');
         return;
       }
-    } else if (step === 5) {
+    } else if (step === 4) {
       // Validate guest data
       if (!validateGuestData()) {
         setError('Molimo ispravite greške u formi');
@@ -657,14 +670,14 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
     if (step === 1) {
       // Always go to staff selection step - never skip it
       setStep(2);
-    } else if (step === 4) {
-      // After time selection
+    } else if (step === 3) {
+      // After date+time selection
       if (user) {
         handleSubmit();
       } else {
-        setStep(5); // Go to guest info
+        setStep(4); // Go to guest info
       }
-    } else if (step === 5) {
+    } else if (step === 4) {
       handleSubmit();
     } else {
       setStep(step + 1);
@@ -732,7 +745,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
       if (errorMessage.includes('upravo zauzet') || errorMessage.includes('nije dostupan') || errorMessage.includes('double booking')) {
         setError('Neko je u međuvremenu zakazao ovaj termin. Molimo odaberite drugo vrijeme.');
         setSelectedTime(''); // Clear selected time
-        setStep(4); // Go back to time selection
+        setStep(3); // Go back to date/time selection
         // Reload available slots
         loadAvailableSlots();
       } else {
@@ -743,7 +756,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
     }
   };
 
-  const stepTitles = ['', 'Izaberite usluge', 'Izaberite frizera / kozmetičara', 'Izaberite datum', 'Izaberite vrijeme', 'Vaši podaci'];
+  const stepTitles = ['', 'Izaberite usluge', 'Izaberite frizera / kozmetičara', 'Izaberite datum i vrijeme', 'Vaši podaci'];
 
   if (!isOpen) return null;
 
@@ -763,10 +776,13 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[95vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full h-screen h-[100dvh] sm:h-auto sm:max-h-[95vh] sm:max-w-2xl rounded-none sm:rounded-2xl shadow-xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 rounded-t-2xl z-10">
+        <div
+          className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 sm:py-4 z-10 shrink-0"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}
+        >
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg sm:text-xl font-bold text-gray-900">Rezervacija termina</h2>
@@ -779,18 +795,18 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
             </button>
           </div>
           
-          {/* Progress Steps - only show for steps 1-4/5 */}
-          {step >= 1 && step <= (user ? 4 : 5) && (
+          {/* Progress Steps - only show for active booking steps */}
+          {step >= 1 && step <= (user ? 3 : 4) && (
             <>
               <div className="flex items-center">
-                {[1, 2, 3, 4, ...(user ? [] : [5])].map((stepNum) => (
+                {[1, 2, 3, ...(user ? [] : [4])].map((stepNum) => (
                   <React.Fragment key={stepNum}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                       step >= stepNum ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-600'
                     }`}>
                       {step > stepNum ? <CheckCircleIcon className="w-5 h-5" /> : stepNum}
                     </div>
-                    {stepNum < (user ? 4 : 5) && (
+                    {stepNum < (user ? 3 : 4) && (
                       <div className={`flex-1 h-1 mx-1 sm:mx-2 ${step > stepNum ? 'bg-orange-500' : 'bg-gray-200'}`} />
                     )}
                   </React.Fragment>
@@ -801,7 +817,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
           )}
         </div>
 
-        <div className="p-4 sm:p-6">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 pb-8 sm:pb-6">
           {/* Step 0: Choice (Guest Only) */}
           {step === 0 && (
             <div className="py-4">
@@ -989,12 +1005,12 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
             </div>
           )}
 
-          {/* Step 3: Date Selection */}
+          {/* Step 3: Date and Time Selection */}
           {step === 3 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-4">
                 <CalendarDaysIcon className="w-6 h-6 text-orange-500" />
-                <h3 className="text-lg font-semibold">Odaberite datum</h3>
+                <h3 className="text-lg font-semibold">Odaberite datum i vrijeme</h3>
               </div>
               
               <div className="bg-gray-50 rounded-xl p-3 sm:p-5">
@@ -1155,7 +1171,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
                             const hasSlots = datesWithSlots.has(dateStr);
                             
                             // Check capacity - disable if 100% full (red)
-                            const isoDateStr = date.toISOString().split('T')[0];
+                            const isoDateStr = formatDateToISO(date);
                             const capacity = capacityData.get(isoDateStr);
                             const isFull = capacity && capacity.percentage >= 100;
                             
@@ -1170,7 +1186,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
                             
                             // For all dates (including today): disable if no slots available
                             // But only after loading is complete to avoid flickering
-                            if (!loadingDates && !hasSlots) {
+                            if (!loadingDates && hasReliableDatesData && !hasSlots) {
                               isDisabled = true;
                             }
                             
@@ -1189,6 +1205,12 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
                                   if (!isDisabled) {
                                     setSelectedDate(dateStr);
                                     setSelectedTime('');
+                                    setTimeout(() => {
+                                      const timeSection = document.getElementById('guest-booking-time-section');
+                                      if (timeSection) {
+                                        timeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                      }
+                                    }, 120);
                                   }
                                 }}
                                 title={
@@ -1220,7 +1242,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
                                   {date.getDate()}
                                 </span>
                                 {isDisabled && !isPast && !isFuture && (
-                                  <span className="text-[8px] sm:text-[10px] leading-tight">
+                                  <span className="hidden sm:block text-[11px] leading-tight">
                                     {!hasSlots && availability.available 
                                       ? 'Nema termina'
                                       : isFull
@@ -1251,106 +1273,90 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
               <p className="text-sm text-gray-500 text-center">
                 Možete rezervisati termin do 3 mjeseca unaprijed
               </p>
-            </div>
-          )}
 
-          {/* Step 4: Time Selection */}
-          {step === 4 && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-4">
-                <ClockIcon className="w-6 h-6 text-orange-500" />
-                <h3 className="text-lg font-semibold">Odaberite vrijeme</h3>
-              </div>
-              
-              {loadingSlots ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-2"></div>
-                  <span className="text-gray-600">Učitavanje dostupnih termina...</span>
-                </div>
-              ) : availableSlots.length === 0 ? (
-                <div className="text-center py-8">
-                  <ClockIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Nema dostupnih termina</h3>
-                  <p className="text-gray-600">Za izabrani datum nema slobodnih termina. Pokušajte sa drugim datumom.</p>
-                </div>
-              ) : (
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm text-gray-500">Datum: <strong>{selectedDate}</strong></span>
-                    <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                      {availableSlots.length} dostupnih
-                    </span>
+              {selectedDate && (
+                <div id="guest-booking-time-section" className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <ClockIcon className="w-5 h-5 text-orange-500" />
+                    <h4 className="text-base font-semibold text-gray-900">Dostupna vremena za {selectedDate}</h4>
                   </div>
-                  
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                    {availableSlots.map((slot) => (
-                      <button
-                        key={slot}
-                        onClick={() => {
-                          setSelectedTime(slot);
-                          // Auto-scroll to notes section after selecting time
-                          setTimeout(() => {
-                            const notesElement = document.getElementById('guest-booking-notes');
-                            if (notesElement) {
-                              notesElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                          }, 300);
-                        }}
-                        className={`relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
-                          selectedTime === slot
-                            ? 'border-orange-500 bg-orange-50 shadow-md'
-                            : 'border-green-200 bg-green-50 hover:border-green-300'
-                        }`}
-                      >
-                        <ClockIcon className={`w-5 h-5 mb-1 ${selectedTime === slot ? 'text-orange-600' : 'text-green-600'}`} />
-                        <span className={`text-sm font-semibold ${selectedTime === slot ? 'text-orange-700' : 'text-green-700'}`}>
-                          {slot}
+
+                  {loadingSlots ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-2"></div>
+                      <span className="text-gray-600">Učitavanje dostupnih termina...</span>
+                    </div>
+                  ) : availableSlots.length === 0 ? (
+                    <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
+                      <ClockIcon className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                      <h3 className="text-base font-medium text-gray-900 mb-1">Nema dostupnih termina</h3>
+                      <p className="text-sm text-gray-600">Za izabrani datum nema slobodnih termina. Pokušajte drugi datum.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-500">Datum: <strong>{selectedDate}</strong></span>
+                        <span className="text-xs sm:text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full whitespace-nowrap">
+                          {availableSlots.length} dostupnih
                         </span>
-                        {selectedTime === slot && (
-                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center">
-                            <div className="w-2 h-2 bg-white rounded-full"></div>
-                          </div>
-                        )}
-                      </button>
-                    ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                        {availableSlots.map((slot) => (
+                          <button
+                            key={slot}
+                            onClick={() => {
+                              setSelectedTime(slot);
+                              setTimeout(() => {
+                                const notesElement = document.getElementById('guest-booking-notes');
+                                if (notesElement) {
+                                  notesElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                              }, 180);
+                            }}
+                            className={`relative flex items-center justify-center py-3 px-2 rounded-xl border-2 transition-all ${
+                              selectedTime === slot
+                                ? 'border-orange-500 bg-orange-50 shadow-sm'
+                                : 'border-green-200 bg-green-50 hover:border-green-300'
+                            }`}
+                          >
+                            <span className={`text-sm sm:text-base font-semibold ${selectedTime === slot ? 'text-orange-700' : 'text-green-700'}`}>
+                              {slot}
+                            </span>
+                            {selectedTime === slot && (
+                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center">
+                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-1" id="guest-booking-notes">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Napomena (opciono)
+                      {selectedTime && (
+                        <span className="ml-2 text-xs text-green-600">✓ Vrijeme odabrano</span>
+                      )}
+                    </label>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={3}
+                      placeholder="Dodatne napomene za frizera..."
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                    />
                   </div>
                 </div>
               )}
-              
-              {/* Visual indicator for notes below */}
-              {!selectedTime && availableSlots.length > 0 && (
-                <div className="flex items-center justify-center gap-2 text-sm text-orange-600 animate-pulse">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                  <span>Napomene su dostupne ispod</span>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              )}
-              
-              {/* Notes */}
-              <div className="mt-4" id="guest-booking-notes">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Napomena (opciono)
-                  {selectedTime && (
-                    <span className="ml-2 text-xs text-green-600">✓ Vrijeme odabrano</span>
-                  )}
-                </label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Dodatne napomene za frizera..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
             </div>
           )}
 
-          {/* Step 5: Guest Info (Guest Only) */}
-          {step === 5 && (
+
+          {/* Step 4: Guest Info (Guest Only) */}
+          {step === 4 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-4">
                 <UserIcon className="w-6 h-6 text-orange-500" />
@@ -1482,8 +1488,11 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
         </div>
 
         {/* Footer */}
-        {step >= 1 && step <= (user ? 4 : 5) && (
-          <div className="sticky bottom-0 flex items-center justify-between px-4 sm:px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
+        {step >= 1 && step <= (user ? 3 : 4) && (
+          <div
+            className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-4 border-t bg-gray-50"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+          >
             <button
               onClick={handleBack}
               className="text-gray-600 hover:text-gray-900 font-medium"
@@ -1511,7 +1520,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
               } disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-colors`}
             >
               {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
-              {step === 4 && user ? 'Potvrdi rezervaciju' : step === (user ? 4 : 5) ? 'Potvrdi rezervaciju' : 'Nastavi'}
+              {step === 3 && user ? 'Potvrdi rezervaciju' : step === (user ? 3 : 4) ? 'Potvrdi rezervaciju' : 'Nastavi'}
             </button>
           </div>
         )}
@@ -1521,3 +1530,4 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
 };
 
 export default GuestBookingModal;
+

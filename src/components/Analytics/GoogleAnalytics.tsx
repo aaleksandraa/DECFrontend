@@ -1,37 +1,58 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { publicSettingsAPI } from '../../services/api';
+import {
+  COOKIE_CONSENT_UPDATED_EVENT,
+  hasAnalyticsConsent,
+} from '../../utils/cookieConsent';
 
 declare global {
   interface Window {
-    dataLayer: any[];
-    gtag: (...args: any[]) => void;
+    dataLayer: unknown[];
+    gtag?: (...args: unknown[]) => void;
+    [key: `ga-disable-${string}`]: boolean | undefined;
   }
 }
 
+function clearGoogleAnalyticsCookies() {
+  const cookieNames = document.cookie
+    .split(';')
+    .map((part) => part.split('=')[0]?.trim())
+    .filter((name): name is string => Boolean(name))
+    .filter(
+      (name) =>
+        name.startsWith('_ga') ||
+        name.startsWith('_gid') ||
+        name.startsWith('_gat')
+    );
+
+  cookieNames.forEach((cookieName) => {
+    document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${window.location.hostname}`;
+  });
+}
+
 export function GoogleAnalytics() {
+  const location = useLocation();
   const [gaId, setGaId] = useState<string | null>(null);
+  const [analyticsAllowed, setAnalyticsAllowed] = useState<boolean>(() =>
+    hasAnalyticsConsent()
+  );
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     const loadAnalyticsSettings = async () => {
       try {
         const settings = await publicSettingsAPI.getAnalyticsSettings();
-        console.debug('[GA] Settings loaded:', settings);
-        
+
         if (settings.google_analytics_enabled && settings.google_analytics_id) {
           const id = settings.google_analytics_id.trim();
-          // Validate GA4 format (G-XXXXXXXXXX) or UA format (UA-XXXXX-X)
           if (/^G-[A-Z0-9]+$/i.test(id) || /^UA-\d+-\d+$/i.test(id)) {
             setGaId(id);
-            console.debug('[GA] Valid ID set:', id);
-          } else {
-            console.warn('[GA] Invalid ID format:', id);
           }
-        } else {
-          console.debug('[GA] Analytics disabled or no ID configured');
         }
       } catch (error) {
-        console.debug('[GA] Failed to load analytics settings:', error);
+        console.debug('[GA] Failed to load analytics settings', error);
       }
     };
 
@@ -39,127 +60,173 @@ export function GoogleAnalytics() {
   }, []);
 
   useEffect(() => {
-    if (!gaId || isLoaded) return;
+    const handleConsentUpdate = () => {
+      setAnalyticsAllowed(hasAnalyticsConsent());
+    };
 
-    // Check if GA script is already loaded
-    const existingScript = document.querySelector(`script[src*="googletagmanager.com/gtag"]`);
+    window.addEventListener(COOKIE_CONSENT_UPDATED_EVENT, handleConsentUpdate);
+    return () => {
+      window.removeEventListener(
+        COOKIE_CONSENT_UPDATED_EVENT,
+        handleConsentUpdate
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!gaId || analyticsAllowed) return;
+
+    window[`ga-disable-${gaId}`] = true;
+
+    if (typeof window.gtag === 'function') {
+      window.gtag('consent', 'update', {
+        analytics_storage: 'denied',
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+      });
+    }
+
+    const injectedScript = document.querySelector(
+      `script[data-frizerino-ga="${gaId}"]`
+    );
+
+    if (injectedScript?.parentNode) {
+      injectedScript.parentNode.removeChild(injectedScript);
+    }
+
+    clearGoogleAnalyticsCookies();
+    setIsLoaded(false);
+  }, [gaId, analyticsAllowed]);
+
+  useEffect(() => {
+    if (!gaId || !analyticsAllowed) return;
+
+    window[`ga-disable-${gaId}`] = false;
+    window.dataLayer = window.dataLayer || [];
+
+    const staleScripts = document.querySelectorAll(
+      `script[data-frizerino-ga]:not([data-frizerino-ga="${gaId}"])`
+    );
+    staleScripts.forEach((script) => script.parentNode?.removeChild(script));
+
+    if (typeof window.gtag !== 'function') {
+      window.gtag = (...args: unknown[]) => {
+        window.dataLayer.push(args);
+      };
+    }
+
+    window.gtag('consent', 'default', {
+      analytics_storage: 'granted',
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+    });
+
+    window.gtag('js', new Date());
+    window.gtag('config', gaId, {
+      send_page_view: false,
+    });
+
+    const existingScript = document.querySelector(
+      `script[data-frizerino-ga="${gaId}"]`
+    ) as HTMLScriptElement | null;
+
     if (existingScript) {
-      console.debug('[GA] Script already exists, skipping injection');
       setIsLoaded(true);
       return;
     }
 
-    console.debug('[GA] Injecting Google Analytics script for ID:', gaId);
-
-    // Initialize dataLayer before script loads
-    window.dataLayer = window.dataLayer || [];
-    
-    // Define gtag function - must push arguments as array (using 'arguments' object)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    function gtag(..._args: any[]) {
-      // eslint-disable-next-line prefer-rest-params
-      window.dataLayer.push(arguments);
-    }
-    window.gtag = gtag;
-
-    // Initialize gtag with timestamp
-    window.gtag('js', new Date());
-
-    // Create and load the GA script
     const script = document.createElement('script');
     script.async = true;
     script.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`;
-    
+    script.dataset.frizerinoGa = gaId;
+
     script.onload = () => {
-      console.debug('[GA] Script loaded successfully');
-      // Configure GA after script loads
-      window.gtag('config', gaId, {
-        page_title: document.title,
-        page_location: window.location.href,
-        send_page_view: true,
-      });
       setIsLoaded(true);
     };
-    
+
     script.onerror = () => {
       console.error('[GA] Failed to load Google Analytics script');
     };
 
     document.head.appendChild(script);
+  }, [gaId, analyticsAllowed]);
 
-    // Track page views on route changes
-    const handleRouteChange = () => {
-      if (window.gtag && gaId) {
-        window.gtag('event', 'page_view', {
-          page_title: document.title,
-          page_location: window.location.href,
-        });
-      }
-    };
+  useEffect(() => {
+    if (!gaId || !analyticsAllowed || !isLoaded || typeof window.gtag !== 'function') {
+      return;
+    }
 
-    // Listen for popstate (back/forward navigation)
-    window.addEventListener('popstate', handleRouteChange);
+    window.gtag('event', 'page_view', {
+      page_title: document.title,
+      page_location: window.location.href,
+      page_path: `${location.pathname}${location.search}${location.hash}`,
+    });
+  }, [
+    gaId,
+    analyticsAllowed,
+    isLoaded,
+    location.pathname,
+    location.search,
+    location.hash,
+  ]);
 
-    return () => {
-      window.removeEventListener('popstate', handleRouteChange);
-    };
-  }, [gaId, isLoaded]);
-
-  // This component doesn't render anything visible
   return null;
 }
 
-// Helper function to track events
 export function trackEvent(
-  eventName: string, 
-  eventParams?: Record<string, any>
+  eventName: string,
+  eventParams?: Record<string, unknown>
 ) {
-  if (typeof window !== 'undefined' && window.gtag) {
-    window.gtag('event', eventName, eventParams);
+  if (
+    typeof window !== 'undefined' &&
+    typeof window.gtag === 'function' &&
+    hasAnalyticsConsent()
+  ) {
+    window.gtag('event', eventName, eventParams ?? {});
   }
 }
 
-// Pre-defined event helpers
 export const analyticsEvents = {
-  // Booking events
-  bookingStarted: (salonId: string, salonName: string) => 
+  bookingStarted: (salonId: string, salonName: string) =>
     trackEvent('booking_started', { salon_id: salonId, salon_name: salonName }),
-  
-  bookingCompleted: (salonId: string, salonName: string, serviceId: string, serviceName: string) =>
-    trackEvent('booking_completed', { 
-      salon_id: salonId, 
+
+  bookingCompleted: (
+    salonId: string,
+    salonName: string,
+    serviceId: string,
+    serviceName: string
+  ) =>
+    trackEvent('booking_completed', {
+      salon_id: salonId,
       salon_name: salonName,
       service_id: serviceId,
-      service_name: serviceName 
+      service_name: serviceName,
     }),
-  
+
   bookingCancelled: (appointmentId: string) =>
     trackEvent('booking_cancelled', { appointment_id: appointmentId }),
 
-  // Search events
   searchPerformed: (query: string, city?: string, resultsCount?: number) =>
-    trackEvent('search', { 
-      search_term: query, 
-      city: city,
-      results_count: resultsCount 
+    trackEvent('search', {
+      search_term: query,
+      city,
+      results_count: resultsCount,
     }),
 
-  // Salon events
   salonViewed: (salonId: string, salonName: string, city: string) =>
-    trackEvent('salon_viewed', { 
-      salon_id: salonId, 
+    trackEvent('salon_viewed', {
+      salon_id: salonId,
       salon_name: salonName,
-      city: city 
+      city,
     }),
 
-  // User events
   userRegistered: (userType: string) =>
     trackEvent('user_registered', { user_type: userType }),
 
   userLoggedIn: (userType: string) =>
     trackEvent('user_logged_in', { user_type: userType }),
 
-  // Contact events
-  contactFormSubmitted: () =>
-    trackEvent('contact_form_submitted'),
+  contactFormSubmitted: () => trackEvent('contact_form_submitted'),
 };

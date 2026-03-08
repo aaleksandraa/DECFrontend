@@ -29,7 +29,8 @@ import { AboutPageNew } from './components/Public/AboutPageNew';
 import { ForClientsPage } from './components/Public/ForClientsPage';
 import { ForSalonsPage } from './components/Public/ForSalonsPage';
 import { AboutPlatformPage } from './components/Public/AboutPlatformPage';
-import { GoogleAnalytics } from './components/Analytics';
+import { GoogleAnalytics, SearchConsoleVerification } from './components/Analytics';
+import { CookieConsentManager } from './components/Common/CookieConsentManager';
 import { WidgetBooking } from './pages/WidgetBooking';
 import { ClientAppointmentsPage } from './pages/ClientAppointmentsPage';
 import { ClientFavoritesPage } from './pages/ClientFavoritesPage';
@@ -181,6 +182,8 @@ function App() {
     <AuthProvider>
       <AppearanceProvider>
         <GoogleAnalytics />
+        <SearchConsoleVerification />
+        <CookieConsentManager />
         <ScrollToTop />
         <Toaster 
           position="top-right"
