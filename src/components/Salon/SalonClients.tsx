@@ -1,4 +1,4 @@
-import { ChangeEvent, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   CalendarDaysIcon,
   CurrencyDollarIcon,
@@ -85,9 +85,9 @@ export function SalonClients() {
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
   const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
-  const [selectedStaffIds, setSelectedStaffIds] = useState<number[]>([]);
-  const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([]);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('all');
+  const [selectedServiceId, setSelectedServiceId] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -132,9 +132,9 @@ export function SalonClients() {
           search,
           per_page: 500,
           last_visit_filter: lastVisitFilter,
-          staff_ids: selectedStaffIds,
-          service_ids: selectedServiceIds,
-          service_categories: selectedCategories,
+          staff_ids: selectedStaffId === 'all' ? [] : [Number(selectedStaffId)],
+          service_ids: selectedServiceId === 'all' ? [] : [Number(selectedServiceId)],
+          service_categories: selectedCategory === 'all' ? [] : [selectedCategory],
         },
       });
 
@@ -157,7 +157,7 @@ export function SalonClients() {
     } finally {
       setLoading(false);
     }
-  }, [lastVisitFilter, search, selectedCategories, selectedServiceIds, selectedStaffIds]);
+  }, [lastVisitFilter, search, selectedCategory, selectedServiceId, selectedStaffId]);
 
   useEffect(() => {
     void fetchClients();
@@ -229,44 +229,23 @@ export function SalonClients() {
     setShowEmailModal(true);
   };
 
-  const handleStaffFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const values = Array.from(event.target.selectedOptions)
-      .map((option) => parseInt(option.value, 10))
-      .filter((value) => Number.isInteger(value) && value > 0);
-
-    setSelectedStaffIds(values);
-  };
-
-  const handleServiceFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const values = Array.from(event.target.selectedOptions)
-      .map((option) => parseInt(option.value, 10))
-      .filter((value) => Number.isInteger(value) && value > 0);
-
-    setSelectedServiceIds(values);
-  };
-
-  const handleCategoryFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const values = Array.from(event.target.selectedOptions).map((option) => option.value).filter(Boolean);
-    setSelectedCategories(values);
-  };
-
   const clearAdvancedFilters = () => {
-    setSelectedStaffIds([]);
-    setSelectedServiceIds([]);
-    setSelectedCategories([]);
+    setSelectedStaffId('all');
+    setSelectedServiceId('all');
+    setSelectedCategory('all');
     setLastVisitFilter('all');
   };
 
   const allVisibleSelected = clients.length > 0 && clients.every((client) => selectedClients.includes(client.id));
   const hasAdvancedFilters =
-    selectedStaffIds.length > 0 ||
-    selectedServiceIds.length > 0 ||
-    selectedCategories.length > 0 ||
+    selectedStaffId !== 'all' ||
+    selectedServiceId !== 'all' ||
+    selectedCategory !== 'all' ||
     lastVisitFilter !== 'all';
   const activeFilterCount = [
-    selectedStaffIds.length > 0,
-    selectedServiceIds.length > 0,
-    selectedCategories.length > 0,
+    selectedStaffId !== 'all',
+    selectedServiceId !== 'all',
+    selectedCategory !== 'all',
     lastVisitFilter !== 'all',
   ].filter(Boolean).length;
 
@@ -351,11 +330,11 @@ export function SalonClients() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Zaposleni</label>
               <select
-                multiple
-                value={selectedStaffIds.map(String)}
-                onChange={handleStaffFilterChange}
-                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+                value={selectedStaffId}
+                onChange={(e) => setSelectedStaffId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
               >
+                <option value="all">Svi zaposleni</option>
                 {staffOptions.map((staff) => (
                   <option key={staff.id} value={staff.id}>
                     {staff.name}
@@ -367,11 +346,11 @@ export function SalonClients() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Usluge</label>
               <select
-                multiple
-                value={selectedServiceIds.map(String)}
-                onChange={handleServiceFilterChange}
-                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+                value={selectedServiceId}
+                onChange={(e) => setSelectedServiceId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
               >
+                <option value="all">Sve usluge</option>
                 {serviceOptions.map((service) => (
                   <option key={service.id} value={service.id}>
                     {service.name}{service.category ? ` (${service.category})` : ''}
@@ -383,11 +362,11 @@ export function SalonClients() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Kategorije usluga</label>
               <select
-                multiple
-                value={selectedCategories}
-                onChange={handleCategoryFilterChange}
-                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
               >
+                <option value="all">Sve kategorije</option>
                 {categoryOptions.map((category) => (
                   <option key={category} value={category}>
                     {category}
@@ -397,7 +376,7 @@ export function SalonClients() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 -mt-2">Za izbor vise stavki drzite Ctrl (Windows) ili Cmd (Mac).</p>
+          <p className="text-xs text-gray-500 -mt-2">Izaberite po jedan filter ili ostavite na "Sve".</p>
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <p className="text-sm text-gray-600">
