@@ -251,11 +251,17 @@ export function SalonServices() {
     }
   };
 
+  const totalCategories = [...new Set(services.map((service) => service.category).filter(Boolean))].length;
+  const averageServicePrice =
+    services.length > 0
+      ? services.reduce((sum, service) => sum + Number(service.discount_price ?? service.price ?? 0), 0) / services.length
+      : 0;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-8 h-8 border-2 border-orange-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Učitavanje...</p>
         </div>
       </div>
@@ -263,7 +269,7 @@ export function SalonServices() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-gray-900">Upravljanje uslugama</h1>
         <div className="flex gap-2 flex-wrap">
@@ -308,7 +314,7 @@ export function SalonServices() {
                   setEditingService(null);
                   setShowAddModal(true);
                 }}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all flex items-center gap-2"
+                className="bg-orange-600 text-white px-6 py-3 rounded-lg hover:bg-orange-700 transition-all flex items-center gap-2"
               >
                 <Plus className="w-5 h-5" />
                 Dodaj uslugu
@@ -317,10 +323,25 @@ export function SalonServices() {
           )}
         </div>
       </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs uppercase tracking-wide text-gray-500">Ukupno usluga</p>
+          <p className="text-2xl font-semibold text-gray-900 mt-1">{services.length}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs uppercase tracking-wide text-gray-500">Kategorije</p>
+          <p className="text-2xl font-semibold text-gray-900 mt-1">{totalCategories}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs uppercase tracking-wide text-gray-500">Prosjecna cijena</p>
+          <p className="text-2xl font-semibold text-gray-900 mt-1">{averageServicePrice.toFixed(2)} KM</p>
+        </div>
+      </div>
       
       {isReordering && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-blue-800 text-sm">
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <p className="text-orange-800 text-sm">
             <strong>Način uređivanja:</strong> Povucite kategorije ili usluge da promijenite njihov redoslijed. 
             Ovaj redoslijed će se prikazivati na profilu salona i widgetu.
           </p>
@@ -357,7 +378,7 @@ export function SalonServices() {
                 {categoryServices.map(service => (
                   <div 
                     key={service.id} 
-                    className={`p-4 sm:p-6 hover:bg-gray-50 transition-colors ${isReordering ? 'cursor-move' : ''} ${draggedService?.id === service.id ? 'opacity-50 bg-blue-50' : ''}`}
+                    className={`p-4 sm:p-6 hover:bg-gray-50 transition-colors ${isReordering ? 'cursor-move' : ''} ${draggedService?.id === service.id ? 'opacity-50 bg-orange-50' : ''}`}
                     draggable={isReordering}
                     onDragStart={(e) => { e.stopPropagation(); isReordering && handleServiceDragStart(e, service); }}
                     onDragOver={(e) => { e.stopPropagation(); isReordering && handleServiceDragOver(e, service); }}
@@ -399,7 +420,7 @@ export function SalonServices() {
                             {service.staff?.map((staffMember: any) => (
                               <span 
                                 key={staffMember.id}
-                                className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                                className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full"
                               >
                                 {staffMember.name}
                               </span>
@@ -413,14 +434,14 @@ export function SalonServices() {
                       <div className="flex gap-2 flex-shrink-0">
                         <button 
                           onClick={() => setManagingImagesFor(service)}
-                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                           title="Upravljaj slikama"
                         >
                           <Image className="w-4 h-4" />
                         </button>
                         <button 
                           onClick={() => handleEdit(service)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
@@ -454,7 +475,7 @@ export function SalonServices() {
               setEditingService(null);
               setShowAddModal(true);
             }}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all"
+            className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition-all"
           >
             Dodaj prvu uslugu
           </button>
@@ -493,7 +514,7 @@ export function SalonServices() {
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     placeholder="Šišanje i feniranje"
                   />
                 </div>
@@ -508,7 +529,7 @@ export function SalonServices() {
                       setFormData(prev => ({ ...prev, category: e.target.value }));
                       setShowCustomCategory(e.target.value === 'custom');
                     }}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   >
                     <option value="">Izaberite kategoriju</option>
                     {defaultCategories.map(category => (
@@ -530,7 +551,7 @@ export function SalonServices() {
                       type="text"
                       value={formData.custom_category}
                       onChange={(e) => setFormData(prev => ({ ...prev, custom_category: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                       placeholder="Unesite naziv kategorije"
                     />
                   </div>
@@ -543,7 +564,7 @@ export function SalonServices() {
                   <select
                     value={formData.duration}
                     onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   >
                     <option value={0}>0 minuta (dodatak - ne može se samostalno zakazati)</option>
                     <option value={15}>15 minuta</option>
@@ -581,7 +602,7 @@ export function SalonServices() {
                         setFormData(prev => ({ ...prev, price: val }));
                       }
                     }}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     placeholder="35"
                   />
                 </div>
@@ -600,7 +621,7 @@ export function SalonServices() {
                         setFormData(prev => ({ ...prev, discount_price: val }));
                       }
                     }}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     placeholder="Ostavite prazno ako nema akcije"
                   />
                   <p className="mt-1 text-xs text-gray-500">Ako je popunjeno, regularna cijena će biti precrtana</p>
@@ -614,7 +635,7 @@ export function SalonServices() {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   rows={3}
                   placeholder="Detaljan opis usluge..."
                 />
@@ -643,7 +664,7 @@ export function SalonServices() {
                             }));
                           }
                         }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
+                        className="rounded border-gray-300 text-orange-600 focus:ring-orange-500" 
                       />
                       <span className="text-sm">{staffMember.name} - {StaffRoleLabels[staffMember.role as StaffRole] || staffMember.role}</span>
                     </label>
@@ -666,7 +687,7 @@ export function SalonServices() {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all flex items-center justify-center gap-2"
+                  className="flex-1 bg-orange-600 text-white py-3 px-4 rounded-lg hover:bg-orange-700 transition-all flex items-center justify-center gap-2"
                 >
                   <Save className="w-4 h-4" />
                   {editingService ? 'Sačuvaj izmjene' : 'Dodaj uslugu'}

@@ -343,11 +343,14 @@ export function SalonStaff() {
     );
   };
 
+  const activeStaffCount = staff.filter((staffMember) => staffMember?.is_active !== false).length;
+  const bookingEnabledCount = staff.filter((staffMember) => staffMember?.accepts_bookings !== false).length;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-8 h-8 border-2 border-orange-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Učitavanje...</p>
         </div>
       </div>
@@ -400,7 +403,7 @@ export function SalonStaff() {
                   setEditingStaff(null);
                   setShowAddModal(true);
                 }}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all flex items-center gap-2"
+                className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition-all flex items-center gap-2"
               >
                 <Plus className="w-5 h-5" />
                 Dodaj zaposlenog
@@ -409,10 +412,25 @@ export function SalonStaff() {
           )}
         </div>
       </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs uppercase tracking-wide text-gray-500">Ukupno zaposlenih</p>
+          <p className="text-2xl font-semibold text-gray-900 mt-1">{staff.length}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs uppercase tracking-wide text-gray-500">Aktivni</p>
+          <p className="text-2xl font-semibold text-gray-900 mt-1">{activeStaffCount}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs uppercase tracking-wide text-gray-500">Primaju rezervacije</p>
+          <p className="text-2xl font-semibold text-gray-900 mt-1">{bookingEnabledCount}</p>
+        </div>
+      </div>
       
       {isReordering && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-blue-800 text-sm">
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <p className="text-orange-800 text-sm">
             <strong>Način uređivanja:</strong> Povucite kartice zaposlenih da promijenite njihov redoslijed. 
             Ovaj redoslijed će se prikazivati na profilu salona i widgetu.
           </p>
@@ -424,7 +442,7 @@ export function SalonStaff() {
         {staff.map(staffMember => (
           <div 
             key={staffMember.id} 
-            className={`bg-white rounded-xl shadow-sm border hover:shadow-md transition-all duration-200 ${isReordering ? 'cursor-move' : ''} ${draggedStaff?.id === staffMember.id ? 'opacity-50 ring-2 ring-blue-400' : ''}`}
+            className={`bg-white rounded-xl shadow-sm border hover:shadow-md transition-all duration-200 ${isReordering ? 'cursor-move' : ''} ${draggedStaff?.id === staffMember.id ? 'opacity-50 ring-2 ring-orange-400' : ''}`}
             draggable={isReordering}
             onDragStart={(e) => isReordering && handleStaffDragStart(e, staffMember)}
             onDragOver={(e) => isReordering && handleStaffDragOver(e, staffMember)}
@@ -435,7 +453,7 @@ export function SalonStaff() {
                 {isReordering && (
                   <GripVertical className="w-5 h-5 text-gray-400 flex-shrink-0" />
                 )}
-                <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center flex-shrink-0">
+                <div className="w-16 h-16 rounded-full overflow-hidden bg-orange-600 flex items-center justify-center flex-shrink-0">
                   {staffMember.avatar ? (
                     <img 
                       src={staffMember.avatar} 
@@ -472,7 +490,7 @@ export function SalonStaff() {
                     {staffMember.specialties?.map((specialty: string, index: number) => (
                       <span 
                         key={index}
-                        className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                        className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full"
                       >
                         {specialty}
                       </span>
@@ -492,7 +510,7 @@ export function SalonStaff() {
                 <div className="flex gap-2 mt-6">
                   <button 
                     onClick={() => handleEdit(staffMember)}
-                    className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 bg-orange-600 text-white py-2 px-4 rounded-lg hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
                   >
                     <Edit className="w-4 h-4" />
                     Uredi
@@ -522,7 +540,7 @@ export function SalonStaff() {
               setEditingStaff(null);
               setShowAddModal(true);
             }}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all"
+            className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition-all"
           >
             Dodaj prvog zaposlenog
           </button>
@@ -568,7 +586,7 @@ export function SalonStaff() {
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
                       errors.name ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder="Marko Petrović"
@@ -585,7 +603,7 @@ export function SalonStaff() {
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
                       errors.role ? 'border-red-500' : 'border-gray-300'
                     }`}
                   >
@@ -607,7 +625,7 @@ export function SalonStaff() {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
                       errors.email ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder="marko@salon.ba"
@@ -630,7 +648,7 @@ export function SalonStaff() {
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
                       errors.password ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder="••••••••"
@@ -657,7 +675,7 @@ export function SalonStaff() {
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
                       errors.phone ? 'border-red-500' : 'border-gray-300'
                     }`}
                     placeholder="+387 60 123 456"
@@ -676,7 +694,7 @@ export function SalonStaff() {
                   value={formData.bio}
                   onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
                   rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   placeholder="Kratka biografija, iskustvo, obrazovanje..."
                 />
               </div>
@@ -691,12 +709,12 @@ export function SalonStaff() {
                     value={newSpecialty}
                     onChange={(e) => setNewSpecialty(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && addSpecialty()}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     placeholder="Dodaj specijalnost..."
                   />
                   <button
                     onClick={addSpecialty}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -705,12 +723,12 @@ export function SalonStaff() {
                   {formData.specialties.map((specialty, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full"
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-800 text-sm rounded-full"
                     >
                       {specialty}
                       <button
                         onClick={() => removeSpecialty(specialty)}
-                        className="text-blue-600 hover:text-blue-800"
+                        className="text-orange-600 hover:text-orange-800"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -742,7 +760,7 @@ export function SalonStaff() {
                             }));
                           }
                         }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
+                        className="rounded border-gray-300 text-orange-600 focus:ring-orange-500" 
                       />
                       <span className="text-sm">{service.name} - {service.category}</span>
                     </label>
@@ -766,7 +784,7 @@ export function SalonStaff() {
                             type="checkbox"
                             checked={daySchedule.is_working}
                             onChange={(e) => handleWorkingHoursChange(dayKey, 'is_working', e.target.checked)}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
                           />
                           <span className="text-sm text-gray-600">Radi</span>
                           {daySchedule.is_working && (
@@ -810,7 +828,7 @@ export function SalonStaff() {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-orange-600 text-white py-2 px-4 rounded-lg hover:bg-orange-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {saving ? (
                     <>

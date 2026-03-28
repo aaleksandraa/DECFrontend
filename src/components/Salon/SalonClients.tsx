@@ -263,6 +263,12 @@ export function SalonClients() {
     selectedServiceIds.length > 0 ||
     selectedCategories.length > 0 ||
     lastVisitFilter !== 'all';
+  const activeFilterCount = [
+    selectedStaffIds.length > 0,
+    selectedServiceIds.length > 0,
+    selectedCategories.length > 0,
+    lastVisitFilter !== 'all',
+  ].filter(Boolean).length;
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Nikad';
@@ -284,12 +290,27 @@ export function SalonClients() {
           {selectedClients.length > 0 && (
             <button
               onClick={() => setShowEmailModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
             >
               <EnvelopeIcon className="h-5 w-5" />
               Posalji email ({selectedClients.length})
             </button>
-          )}
+            )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Ukupno klijenata</p>
+            <p className="text-2xl font-semibold text-gray-900 mt-1">{totalClients}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Oznaceni klijenti</p>
+            <p className="text-2xl font-semibold text-gray-900 mt-1">{selectedClients.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Aktivni filteri</p>
+            <p className="text-2xl font-semibold text-gray-900 mt-1">{activeFilterCount}</p>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-4">
@@ -301,14 +322,14 @@ export function SalonClients() {
                 placeholder="Pretraga po imenu, email-u ili telefonu..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               />
             </div>
 
             <select
               value={lastVisitFilter}
               onChange={(e) => setLastVisitFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             >
               <option value="all">Svi klijenti</option>
               <option value="week">Zadnjih 7 dana</option>
@@ -333,7 +354,7 @@ export function SalonClients() {
                 multiple
                 value={selectedStaffIds.map(String)}
                 onChange={handleStaffFilterChange}
-                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
               >
                 {staffOptions.map((staff) => (
                   <option key={staff.id} value={staff.id}>
@@ -349,7 +370,7 @@ export function SalonClients() {
                 multiple
                 value={selectedServiceIds.map(String)}
                 onChange={handleServiceFilterChange}
-                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
               >
                 {serviceOptions.map((service) => (
                   <option key={service.id} value={service.id}>
@@ -365,7 +386,7 @@ export function SalonClients() {
                 multiple
                 value={selectedCategories}
                 onChange={handleCategoryFilterChange}
-                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
               >
                 {categoryOptions.map((category) => (
                   <option key={category} value={category}>
@@ -383,7 +404,7 @@ export function SalonClients() {
               Prikazano {clients.length} od {totalClients} klijenata
             </p>
             {hasAdvancedFilters && (
-              <button onClick={clearAdvancedFilters} className="text-sm text-pink-700 hover:text-pink-800 font-medium">
+              <button onClick={clearAdvancedFilters} className="text-sm text-orange-700 hover:text-orange-800 font-medium">
                 Ocisti filtere
               </button>
             )}
@@ -392,7 +413,7 @@ export function SalonClients() {
 
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
           </div>
         ) : clients.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
@@ -410,7 +431,7 @@ export function SalonClients() {
                         type="checkbox"
                         checked={allVisibleSelected}
                         onChange={selectAllVisibleClients}
-                        className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                        className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
                       />
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Klijent</th>
@@ -429,7 +450,7 @@ export function SalonClients() {
                           type="checkbox"
                           checked={selectedClients.includes(client.id)}
                           onChange={() => toggleClientSelection(client.id)}
-                          className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                          className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
                         />
                       </td>
 
@@ -438,8 +459,8 @@ export function SalonClients() {
                           {client.avatar ? (
                             <img src={client.avatar} alt={client.name} className="h-10 w-10 rounded-full object-cover" />
                           ) : (
-                            <div className="h-10 w-10 rounded-full bg-pink-100 flex items-center justify-center">
-                              <UserIcon className="h-6 w-6 text-pink-600" />
+                            <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
+                              <UserIcon className="h-6 w-6 text-orange-600" />
                             </div>
                           )}
                           <div>
@@ -485,7 +506,7 @@ export function SalonClients() {
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => fetchClientDetails(client.id)}
-                            className="text-pink-600 hover:text-pink-700 font-medium text-sm"
+                            className="text-orange-600 hover:text-orange-700 font-medium text-sm"
                           >
                             Detalji
                           </button>
@@ -527,7 +548,7 @@ export function SalonClients() {
                     value={emailSubject}
                     onChange={(e) => setEmailSubject(e.target.value)}
                     placeholder="Unesite naslov email-a"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   />
                 </div>
 
@@ -538,7 +559,7 @@ export function SalonClients() {
                     onChange={(e) => setEmailMessage(e.target.value)}
                     placeholder="Primjer: Dragi {ime}, ..."
                     rows={8}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-500 mt-2">
                     Placeholderi: <code>{'{ime}'}</code>, <code>{'{korisnicko_ime}'}</code>, <code>{'{name}'}</code>.
@@ -556,7 +577,7 @@ export function SalonClients() {
                 <button
                   onClick={handleSendEmail}
                   disabled={sendingEmail}
-                  className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50"
                 >
                   <PaperAirplaneIcon className="h-5 w-5" />
                   {sendingEmail ? 'Saljem...' : 'Posalji'}
@@ -581,8 +602,8 @@ export function SalonClients() {
                   {selectedClient.client.avatar ? (
                     <img src={selectedClient.client.avatar} alt={selectedClient.client.name} className="h-16 w-16 rounded-full object-cover" />
                   ) : (
-                    <div className="h-16 w-16 rounded-full bg-pink-100 flex items-center justify-center">
-                      <UserIcon className="h-8 w-8 text-pink-600" />
+                    <div className="h-16 w-16 rounded-full bg-orange-100 flex items-center justify-center">
+                      <UserIcon className="h-8 w-8 text-orange-600" />
                     </div>
                   )}
                   <div>
