@@ -2,8 +2,14 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+let runtimeAuthToken: string | null = null;
+
+export const setRuntimeAuthToken = (token: string | null): void => {
+  runtimeAuthToken = token && token.trim() !== '' ? token : null;
+};
 
 const clearAuthStorage = (): void => {
+  setRuntimeAuthToken(null);
   localStorage.removeItem('auth_token');
   localStorage.removeItem('token');
   localStorage.removeItem('currentUser');
@@ -35,6 +41,11 @@ const api = axios.create({
 // Add request interceptor to ensure CSRF token is fresh
 api.interceptors.request.use(
   async (config) => {
+    if (runtimeAuthToken) {
+      config.headers = config.headers ?? {};
+      (config.headers as any).Authorization = `Bearer ${runtimeAuthToken}`;
+    }
+
     // For state-changing requests, ensure we have a fresh CSRF token
     if (['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase() || '')) {
       // Check if XSRF-TOKEN cookie exists

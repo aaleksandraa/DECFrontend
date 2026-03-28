@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User, AuthContextType } from '@/types';
-import { authAPI } from '../services/api';
+import { authAPI, setRuntimeAuthToken } from '../services/api';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -59,11 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('token');
       localStorage.removeItem('currentUser');
       sessionStorage.clear();
+      setRuntimeAuthToken(null);
 
       // Get fresh CSRF token
       await authAPI.getCSRF();
 
       const userData = await authAPI.login(email, password);
+      setRuntimeAuthToken(userData?.access_token || null);
       setUser(userData.user);
 
       return userData.user;
@@ -71,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Login error:', error);
       localStorage.removeItem('auth_token');
       localStorage.removeItem('token');
+      setRuntimeAuthToken(null);
       // Re-throw error so components can handle email_not_verified case
       throw error;
     }
@@ -104,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('token');
       localStorage.removeItem('currentUser');
       sessionStorage.clear();
+      setRuntimeAuthToken(null);
     }
   };
 
