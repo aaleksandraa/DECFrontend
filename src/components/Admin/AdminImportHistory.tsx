@@ -8,6 +8,7 @@ import {
   FileText,
   Clock
 } from 'lucide-react';
+import api from '../../services/api';
 
 interface ImportBatch {
   id: number;
@@ -41,21 +42,12 @@ export function AdminImportHistory() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/v1/admin/import/history', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Greška pri učitavanju historije');
-      }
+      const response = await api.get('/admin/import/history');
+      const data = response.data;
 
       setImports(data.data.data || []);
     } catch (err: any) {
-      setError(err.message || 'Greška pri učitavanju historije');
+      setError(err?.response?.data?.message || err.message || 'Greška pri učitavanju historije');
     } finally {
       setLoading(false);
     }
@@ -63,17 +55,11 @@ export function AdminImportHistory() {
 
   const downloadErrors = async (importBatchId: number) => {
     try {
-      const response = await fetch(`/api/v1/admin/import/batch/${importBatchId}/errors`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      const response = await api.get(`/admin/import/batch/${importBatchId}/errors`, {
+        responseType: 'blob',
       });
 
-      if (!response.ok) {
-        throw new Error('Nema grešaka za preuzimanje');
-      }
-
-      const blob = await response.blob();
+      const blob = response.data as Blob;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -83,7 +69,7 @@ export function AdminImportHistory() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err: any) {
-      alert(err.message || 'Greška pri preuzimanju');
+      alert(err?.response?.data?.message || err.message || 'Greška pri preuzimanju');
     }
   };
 
@@ -258,3 +244,5 @@ export function AdminImportHistory() {
     </div>
   );
 }
+
+

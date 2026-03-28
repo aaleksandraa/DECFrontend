@@ -8,46 +8,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const fetchedRef = useRef(false);
+  const authRequestVersionRef = useRef(0);
+
+  const beginAuthRequest = () => {
+    authRequestVersionRef.current += 1;
+    return authRequestVersionRef.current;
+  };
+
+  const isLatestAuthRequest = (requestVersion: number) => {
+    return requestVersion === authRequestVersionRef.current;
+  };
 
   useEffect(() => {
     // Prevent double fetch in React StrictMode
     if (fetchedRef.current) return;
     fetchedRef.current = true;
-    
-    fetchCurrentUser(); // na mount-u pokušaj dohvat korisnika iz cookie-based sesije
+
+    fetchCurrentUser();
   }, []);
 
   const fetchCurrentUser = async () => {
+    const requestVersion = beginAuthRequest();
+
     try {
       const response = await authAPI.getUser();
+      if (!isLatestAuthRequest(requestVersion)) return;
       setUser(response?.user || null);
     } catch (error: any) {
-      // 401 je očekivano kada korisnik nije ulogovan - nije prava greška
+      if (!isLatestAuthRequest(requestVersion)) return;
+
+      // 401 is expected when the user is not authenticated.
       if (error?.response?.status !== 401) {
         console.error('Error fetching user:', error);
       }
       setUser(null);
     } finally {
-      setLoading(false);
+      if (isLatestAuthRequest(requestVersion)) {
+        setLoading(false);
+      }
     }
   };
 
   const login = async (email: string, password: string): Promise<User | null> => {
     try {
-      // Clear any old session data first
+      // Invalidate in-flight auth checks so stale 401 responses cannot overwrite a fresh login.
+      beginAuthRequest();
+
+      // Clear any old session/token data first
       localStorage.removeItem('auth_token');
+      localStorage.removeItem('token');
       localStorage.removeItem('currentUser');
       sessionStorage.clear();
-      
+
       // Get fresh CSRF token
       await authAPI.getCSRF();
 
       const userData = await authAPI.login(email, password);
       setUser(userData.user);
-      
+
       return userData.user;
     } catch (error: any) {
-      console.error('❌ Login error:', error);
+      console.error('Login error:', error);
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('token');
       // Re-throw error so components can handle email_not_verified case
       throw error;
     }
@@ -59,12 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authAPI.getCSRF();
 
       await authAPI.register(userData, password);
-      // NE dohvatamo usera - korisnik mora prvo verificirati email
-      // await fetchCurrentUser();
+      // Do not auto-fetch user after registration; email verification is required.
       return true;
     } catch (error: any) {
       console.error('Registration error:', error);
-      // Re-throw error so component can display specific error message
       throw error;
     } finally {
       setLoading(false);
@@ -77,11 +98,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      beginAuthRequest();
       setUser(null);
-      // Clear any cached data
       localStorage.removeItem('auth_token');
+      localStorage.removeItem('token');
       localStorage.removeItem('currentUser');
-      // Clear session storage
       sessionStorage.clear();
     }
   };
@@ -98,14 +119,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshUser = async (): Promise<void> => {
+    const requestVersion = beginAuthRequest();
+
     try {
       const response = await authAPI.getUser();
+      if (!isLatestAuthRequest(requestVersion)) return;
       setUser(response?.user || null);
     } catch (error: any) {
+      if (!isLatestAuthRequest(requestVersion)) return;
+
       if (error?.response?.status !== 401) {
         console.error('Error refreshing user:', error);
       }
-      // If 401, user is not authenticated - clear state
+
       if (error?.response?.status === 401) {
         setUser(null);
       }
@@ -113,18 +139,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const ensureAuthenticated = async (): Promise<boolean> => {
-    // Check if user is already loaded
     if (user) return true;
-    
-    // Try to fetch user
+
+    const requestVersion = beginAuthRequest();
+
     try {
       const response = await authAPI.getUser();
+      if (!isLatestAuthRequest(requestVersion)) {
+        return false;
+      }
+
       if (response?.user) {
         setUser(response.user);
         return true;
       }
+
       return false;
     } catch (error: any) {
+      if (!isLatestAuthRequest(requestVersion)) {
+        return false;
+      }
+
       if (error?.response?.status === 401) {
         setUser(null);
       }

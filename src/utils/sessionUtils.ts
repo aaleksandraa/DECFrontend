@@ -34,6 +34,7 @@ export const getCookie = (name: string): string | null => {
 export const clearAuthData = (): void => {
   // Clear localStorage
   localStorage.removeItem('auth_token');
+  localStorage.removeItem('token');
   localStorage.removeItem('currentUser');
   
   // Clear sessionStorage

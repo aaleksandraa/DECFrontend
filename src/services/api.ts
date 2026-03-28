@@ -3,6 +3,13 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
+const clearAuthStorage = (): void => {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('token');
+  localStorage.removeItem('currentUser');
+  sessionStorage.clear();
+};
+
 axios.defaults.withCredentials = true; // 🔐 Za session cookies
 axios.defaults.baseURL = API_BASE_URL;
 
@@ -88,9 +95,7 @@ api.interceptors.response.use(
       // Don't redirect for public endpoints or initial checks
       if (!isPublicEndpoint) {
         // Clear auth data and redirect to login only for protected routes
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('currentUser');
-        sessionStorage.clear();
+        clearAuthStorage();
         
         // Show user-friendly message
         console.warn('Session expired. Please login again.');
@@ -137,8 +142,12 @@ export const authAPI = {
   },
   
   logout: async () => {
-    const response = await api.post('/logout');
-    return response.data;
+    try {
+      const response = await api.post('/logout');
+      return response.data;
+    } finally {
+      clearAuthStorage();
+    }
   },
   
   getUser: async () => {
