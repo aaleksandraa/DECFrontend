@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import { 
-  MagnifyingGlassIcon, 
-  EnvelopeIcon, 
-  UserIcon,
-  PhoneIcon,
+import { ChangeEvent, useCallback, useEffect, useState } from 'react';
+import {
   CalendarDaysIcon,
   CurrencyDollarIcon,
+  EnvelopeIcon,
+  MagnifyingGlassIcon,
+  PaperAirplaneIcon,
+  PhoneIcon,
+  UserIcon,
   XMarkIcon,
-  PaperAirplaneIcon
 } from '@heroicons/react/24/outline';
 import api from '../../services/api';
 import { Toast, ToastType } from '../Common/Toast';
@@ -25,7 +25,18 @@ interface Client {
   completed_appointments: number;
   last_visit: string | null;
   total_spent: number;
-  member_since: string;
+  member_since: string | null;
+}
+
+interface StaffOption {
+  id: number;
+  name: string;
+}
+
+interface ServiceOption {
+  id: number;
+  name: string;
+  category?: string | null;
 }
 
 interface ClientDetails {
@@ -55,8 +66,9 @@ interface ClientDetails {
   }>;
 }
 
+type LastVisitFilter = 'all' | 'week' | 'month' | '3months' | '6months' | 'year';
+
 export function SalonClients() {
-  // Zustand store for persistence
   const {
     emailForm,
     setEmailForm,
@@ -68,7 +80,15 @@ export function SalonClients() {
   } = useFormStore();
 
   const [clients, setClients] = useState<Client[]>([]);
+  const [totalClients, setTotalClients] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
+  const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [selectedStaffIds, setSelectedStaffIds] = useState<number[]>([]);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [selectedClient, setSelectedClient] = useState<ClientDetails | null>(null);
@@ -77,84 +97,71 @@ export function SalonClients() {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // Use persisted values
   const search = searchQuery;
   const setSearch = setSearchQuery;
-  const lastVisitFilter = storedLastVisitFilter;
-  const setLastVisitFilter = setStoredLastVisitFilter;
+  const lastVisitFilter = (storedLastVisitFilter as LastVisitFilter) || 'all';
+  const setLastVisitFilter = (value: string) => setStoredLastVisitFilter(value);
   const selectedClients = emailForm.selectedClients;
   const emailSubject = emailForm.subject;
   const emailMessage = emailForm.message;
 
-  // Update functions that sync with store
-  const setSelectedClients = (clients: number[] | ((prev: number[]) => number[])) => {
-    const newClients = typeof clients === 'function' ? clients(emailForm.selectedClients) : clients;
-    setEmailForm({ selectedClients: newClients });
+  const setSelectedClients = (value: number[] | ((prev: number[]) => number[])) => {
+    const newValue = typeof value === 'function' ? value(emailForm.selectedClients) : value;
+    setEmailForm({ selectedClients: newValue });
   };
 
-  const setEmailSubject = (subject: string) => {
-    setEmailForm({ subject });
-  };
+  const setEmailSubject = (subject: string) => setEmailForm({ subject });
+  const setEmailMessage = (message: string) => setEmailForm({ message });
 
-  const setEmailMessage = (message: string) => {
-    setEmailForm({ message });
-  };
-
-  // Auto-save callback
   const handleAutoSave = useCallback(() => {
     setAutoSaveStatus('saving');
-    // Simulate save delay
     setTimeout(() => {
       setAutoSaveStatus('saved');
       setLastSaved(new Date());
-      // Reset to idle after 3 seconds
-      setTimeout(() => setAutoSaveStatus('idle'), 3000);
-    }, 300);
+      setTimeout(() => setAutoSaveStatus('idle'), 2500);
+    }, 250);
   }, []);
 
-  // Auto-save email form data
   useAutoSave(handleAutoSave, { emailSubject, emailMessage, selectedClients }, 800);
 
-  useEffect(() => {
-    fetchClients();
-  }, [search]);
-
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get('/clients', {
-        params: { search }
+        params: {
+          search,
+          per_page: 500,
+          last_visit_filter: lastVisitFilter,
+          staff_ids: selectedStaffIds,
+          service_ids: selectedServiceIds,
+          service_categories: selectedCategories,
+        },
       });
-      setClients(response.data.clients || []);
+
+      const data = response.data || {};
+      setClients(data.clients || []);
+      setTotalClients(data.total || 0);
+      setStaffOptions(data.filters?.staff || []);
+      setServiceOptions(data.filters?.services || []);
+      setCategoryOptions(data.filters?.categories || []);
     } catch (error: any) {
       console.error('Error fetching clients:', error);
-      
-      // Show user-friendly error message
+
       if (error?.response?.status === 401) {
-        setToast({ 
-          message: 'Sesija je istekla. Molimo prijavite se ponovo.', 
-          type: 'error' 
-        });
+        setToast({ message: 'Sesija je istekla. Prijavite se ponovo.', type: 'error' });
       } else if (error?.response?.status === 403) {
-        setToast({ 
-          message: 'Nemate dozvolu za pristup klijentima.', 
-          type: 'error' 
-        });
-      } else if (error?.response?.status === 404) {
-        setToast({ 
-          message: 'Ruta za klijente nije pronađena. Kontaktirajte podršku.', 
-          type: 'error' 
-        });
+        setToast({ message: 'Nemate dozvolu za pristup klijentima.', type: 'error' });
       } else {
-        setToast({ 
-          message: 'Greška pri učitavanju klijenata. Pokušajte ponovo.', 
-          type: 'error' 
-        });
+        setToast({ message: 'Greska pri ucitavanju klijenata.', type: 'error' });
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [lastVisitFilter, search, selectedCategories, selectedServiceIds, selectedStaffIds]);
+
+  useEffect(() => {
+    void fetchClients();
+  }, [fetchClients]);
 
   const fetchClientDetails = async (clientId: number) => {
     try {
@@ -163,475 +170,487 @@ export function SalonClients() {
       setShowClientDetails(true);
     } catch (error) {
       console.error('Error fetching client details:', error);
+      setToast({ message: 'Greska pri ucitavanju detalja klijenta.', type: 'error' });
     }
   };
 
   const toggleClientSelection = (clientId: number) => {
-    setSelectedClients(prev =>
-      prev.includes(clientId)
-        ? prev.filter(id => id !== clientId)
-        : [...prev, clientId]
-    );
+    setSelectedClients((prev) => (prev.includes(clientId) ? prev.filter((id) => id !== clientId) : [...prev, clientId]));
   };
 
-  const selectAllClients = () => {
-    const filteredClientIds = filteredClients.map(c => c.id);
-    const allSelected = filteredClientIds.every(id => selectedClients.includes(id));
-    
-    if (allSelected) {
-      // Deselect all filtered clients
-      setSelectedClients(prev => prev.filter(id => !filteredClientIds.includes(id)));
+  const selectAllVisibleClients = () => {
+    const visibleIds = clients.map((client) => client.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedClients.includes(id));
+
+    if (allVisibleSelected) {
+      setSelectedClients((prev) => prev.filter((id) => !visibleIds.includes(id)));
     } else {
-      // Select all filtered clients
-      setSelectedClients(prev => [...new Set([...prev, ...filteredClientIds])]);
+      setSelectedClients((prev) => [...new Set([...prev, ...visibleIds])]);
     }
   };
 
-  const showToast = (message: string, type: ToastType) => {
-    setToast({ message, type });
-  };
-
   const handleSendEmail = async () => {
-    if (!emailSubject || !emailMessage || selectedClients.length === 0) {
-      showToast('Molimo popunite sve podatke', 'warning');
+    if (!emailSubject.trim() || !emailMessage.trim() || selectedClients.length === 0) {
+      setToast({ message: 'Unesite naslov, poruku i izaberite klijente.', type: 'warning' });
       return;
     }
 
     try {
       setSendingEmail(true);
-      await api.post('/clients/send-email', {
+      const response = await api.post('/clients/send-email', {
         client_ids: selectedClients,
         subject: emailSubject,
-        message: emailMessage
+        message: emailMessage,
       });
-      showToast(`Email uspješno poslat na ${selectedClients.length} klijenata`, 'success');
+
+      const sent = response.data?.sent ?? 0;
+      const failed = response.data?.failed ?? 0;
+      const skippedNotClient = response.data?.skipped_not_client ?? 0;
+      const skippedMissingEmail = response.data?.skipped_missing_email ?? 0;
+      const skipped = skippedNotClient + skippedMissingEmail;
+
+      setToast({
+        message: `Email poslato: ${sent}, neuspjelo: ${failed}, preskoceno: ${skipped}.`,
+        type: 'success',
+      });
+
       setShowEmailModal(false);
-      // Clear form after successful send
       clearEmailForm();
     } catch (error) {
       console.error('Error sending email:', error);
-      showToast('Greška prilikom slanja email-a', 'error');
+      setToast({ message: 'Greska pri slanju email-a.', type: 'error' });
     } finally {
       setSendingEmail(false);
     }
   };
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Nikad';
-    return new Date(dateString).toLocaleDateString('hr-HR');
-  };
-
-  const formatCurrency = (amount: number) => {
-    return `${amount.toFixed(2)} KM`;
-  };
-
-  const filterClientsByLastVisit = (clients: Client[]) => {
-    if (lastVisitFilter === 'all') return clients;
-
-    const now = new Date();
-    return clients.filter(client => {
-      if (!client.last_visit) return false;
-      const lastVisit = new Date(client.last_visit);
-      const daysDiff = Math.floor((now.getTime() - lastVisit.getTime()) / (1000 * 60 * 60 * 24));
-
-      switch (lastVisitFilter) {
-        case 'week':
-          return daysDiff <= 7;
-        case 'month':
-          return daysDiff <= 30;
-        case '3months':
-          return daysDiff <= 90;
-        case '6months':
-          return daysDiff <= 180;
-        case 'year':
-          return daysDiff <= 365;
-        default:
-          return true;
-      }
-    });
-  };
-
-  const filteredClients = filterClientsByLastVisit(clients);
 
   const sendEmailToClient = (clientId: number) => {
     setSelectedClients([clientId]);
     setShowEmailModal(true);
   };
 
+  const handleStaffFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const values = Array.from(event.target.selectedOptions)
+      .map((option) => parseInt(option.value, 10))
+      .filter((value) => Number.isInteger(value) && value > 0);
+
+    setSelectedStaffIds(values);
+  };
+
+  const handleServiceFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const values = Array.from(event.target.selectedOptions)
+      .map((option) => parseInt(option.value, 10))
+      .filter((value) => Number.isInteger(value) && value > 0);
+
+    setSelectedServiceIds(values);
+  };
+
+  const handleCategoryFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const values = Array.from(event.target.selectedOptions).map((option) => option.value).filter(Boolean);
+    setSelectedCategories(values);
+  };
+
+  const clearAdvancedFilters = () => {
+    setSelectedStaffIds([]);
+    setSelectedServiceIds([]);
+    setSelectedCategories([]);
+    setLastVisitFilter('all');
+  };
+
+  const allVisibleSelected = clients.length > 0 && clients.every((client) => selectedClients.includes(client.id));
+  const hasAdvancedFilters =
+    selectedStaffIds.length > 0 ||
+    selectedServiceIds.length > 0 ||
+    selectedCategories.length > 0 ||
+    lastVisitFilter !== 'all';
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'Nikad';
+    return new Date(dateString).toLocaleDateString('sr-Latn-RS');
+  };
+
+  const formatCurrency = (amount: number) => `${amount.toFixed(2)} KM`;
+
   return (
     <>
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-      <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Klijenti</h2>
-          <p className="text-gray-600 mt-1">Upravljajte vašim klijentima i šaljite im poruke</p>
-        </div>
-        {selectedClients.length > 0 && (
-          <button
-            onClick={() => setShowEmailModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
-          >
-            <EnvelopeIcon className="h-5 w-5" />
-            Pošalji email ({selectedClients.length})
-          </button>
-        )}
-      </div>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* Search and Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Klijenti</h2>
+            <p className="text-gray-600 mt-1">Filtrirajte klijente i saljite personalizovane email poruke.</p>
+          </div>
+          {selectedClients.length > 0 && (
+            <button
+              onClick={() => setShowEmailModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+            >
+              <EnvelopeIcon className="h-5 w-5" />
+              Posalji email ({selectedClients.length})
+            </button>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-4">
+          <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Pretraži po imenu, email-u ili telefonu..."
+                placeholder="Pretraga po imenu, email-u ili telefonu..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
               />
             </div>
+
             <select
               value={lastVisitFilter}
               onChange={(e) => setLastVisitFilter(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
             >
               <option value="all">Svi klijenti</option>
-              <option value="week">Posljednjih 7 dana</option>
-              <option value="month">Posljednjih 30 dana</option>
-              <option value="3months">Posljednjih 3 mjeseca</option>
-              <option value="6months">Posljednjih 6 mjeseci</option>
-              <option value="year">Posljednja godina</option>
+              <option value="week">Zadnjih 7 dana</option>
+              <option value="month">Zadnjih 30 dana</option>
+              <option value="3months">Zadnja 3 mjeseca</option>
+              <option value="6months">Zadnjih 6 mjeseci</option>
+              <option value="year">Zadnjih 12 mjeseci</option>
             </select>
+
             <button
-              onClick={selectAllClients}
+              onClick={selectAllVisibleClients}
               className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
-              {selectedClients.length === filteredClients.length ? 'Poništi sve' : 'Označi sve'}
+              {allVisibleSelected ? 'Ponisti sve' : 'Oznaci sve'}
             </button>
           </div>
-          {lastVisitFilter !== 'all' && (
-            <div className="text-sm text-gray-600">
-              Prikazano {filteredClients.length} od {clients.length} klijenata
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Clients List */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
-        </div>
-      ) : filteredClients.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <UserIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">
-            {lastVisitFilter !== 'all' ? 'Nema klijenata koji odgovaraju filteru' : 'Nema klijenata'}
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left">
-                    <input
-                      type="checkbox"
-                      checked={filteredClients.length > 0 && filteredClients.every(c => selectedClients.includes(c.id))}
-                      onChange={selectAllClients}
-                      className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-                    />
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Klijent
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Kontakt
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Termini
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Posljednja posjeta
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ukupno potrošeno
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Akcije
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredClients.map((client) => (
-                  <tr key={client.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedClients.includes(client.id)}
-                        onChange={() => toggleClientSelection(client.id)}
-                        className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-                      />
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        {client.avatar ? (
-                          <img src={client.avatar} alt={client.name} className="h-10 w-10 rounded-full" />
-                        ) : (
-                          <div className="h-10 w-10 rounded-full bg-pink-100 flex items-center justify-center">
-                            <UserIcon className="h-6 w-6 text-pink-600" />
-                          </div>
-                        )}
-                        <div>
-                          <p className="font-medium text-gray-900">{client.name}</p>
-                          <p className="text-sm text-gray-500">Član od {formatDate(client.member_since)}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <EnvelopeIcon className="h-4 w-4" />
-                          {client.email}
-                        </div>
-                        {client.phone && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <PhoneIcon className="h-4 w-4" />
-                            {client.phone}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
-                        <span className="font-medium text-gray-900">{client.total_appointments}</span>
-                        <span className="text-sm text-gray-500">
-                          ({client.completed_appointments} završeno)
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {formatDate(client.last_visit)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <CurrencyDollarIcon className="h-5 w-5 text-green-500" />
-                        <span className="font-medium text-gray-900">{formatCurrency(client.total_spent)}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => fetchClientDetails(client.id)}
-                          className="text-pink-600 hover:text-pink-700 font-medium text-sm"
-                        >
-                          Detalji
-                        </button>
-                        <button
-                          onClick={() => sendEmailToClient(client.id)}
-                          className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
-                          title="Pošalji email"
-                        >
-                          <EnvelopeIcon className="h-4 w-4" />
-                          Email
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Zaposleni</label>
+              <select
+                multiple
+                value={selectedStaffIds.map(String)}
+                onChange={handleStaffFilterChange}
+                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+              >
+                {staffOptions.map((staff) => (
+                  <option key={staff.id} value={staff.id}>
+                    {staff.name}
+                  </option>
                 ))}
-              </tbody>
-            </table>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Usluge</label>
+              <select
+                multiple
+                value={selectedServiceIds.map(String)}
+                onChange={handleServiceFilterChange}
+                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+              >
+                {serviceOptions.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name}{service.category ? ` (${service.category})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Kategorije usluga</label>
+              <select
+                multiple
+                value={selectedCategories}
+                onChange={handleCategoryFilterChange}
+                className="w-full min-h-[112px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+              >
+                {categoryOptions.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 -mt-2">Za izbor vise stavki drzite Ctrl (Windows) ili Cmd (Mac).</p>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-sm text-gray-600">
+              Prikazano {clients.length} od {totalClients} klijenata
+            </p>
+            {hasAdvancedFilters && (
+              <button onClick={clearAdvancedFilters} className="text-sm text-pink-700 hover:text-pink-800 font-medium">
+                Ocisti filtere
+              </button>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Email Modal */}
-      {showEmailModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-xl font-bold text-gray-900">
-                  Pošalji email ({selectedClients.length} klijenata)
-                </h3>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
+          </div>
+        ) : clients.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <UserIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">Nema klijenata za izabrane filtere.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={selectAllVisibleClients}
+                        className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                      />
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Klijent</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kontakt</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Termini</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Zadnja posjeta</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ukupno potroseno</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Akcije</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {clients.map((client) => (
+                    <tr key={client.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedClients.includes(client.id)}
+                          onChange={() => toggleClientSelection(client.id)}
+                          className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                        />
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {client.avatar ? (
+                            <img src={client.avatar} alt={client.name} className="h-10 w-10 rounded-full object-cover" />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-pink-100 flex items-center justify-center">
+                              <UserIcon className="h-6 w-6 text-pink-600" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-medium text-gray-900">{client.name}</p>
+                            <p className="text-sm text-gray-500">Clan od {formatDate(client.member_since)}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <EnvelopeIcon className="h-4 w-4" />
+                            {client.email || '-'}
+                          </div>
+                          {client.phone && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <PhoneIcon className="h-4 w-4" />
+                              {client.phone}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
+                          <span className="font-medium text-gray-900">{client.total_appointments}</span>
+                          <span className="text-sm text-gray-500">({client.completed_appointments} zavrseno)</span>
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-4 text-sm text-gray-600">{formatDate(client.last_visit)}</td>
+
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <CurrencyDollarIcon className="h-5 w-5 text-green-500" />
+                          <span className="font-medium text-gray-900">{formatCurrency(client.total_spent)}</span>
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => fetchClientDetails(client.id)}
+                            className="text-pink-600 hover:text-pink-700 font-medium text-sm"
+                          >
+                            Detalji
+                          </button>
+                          <button
+                            onClick={() => sendEmailToClient(client.id)}
+                            className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
+                          >
+                            <EnvelopeIcon className="h-4 w-4" />
+                            Email
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {showEmailModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-xl font-bold text-gray-900">Posalji email ({selectedClients.length} klijenata)</h3>
+                  <button onClick={() => setShowEmailModal(false)} className="text-gray-400 hover:text-gray-600">
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+                <AutoSaveIndicator status={autoSaveStatus} lastSaved={lastSaved} />
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Naslov</label>
+                  <input
+                    type="text"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    placeholder="Unesite naslov email-a"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Poruka</label>
+                  <textarea
+                    value={emailMessage}
+                    onChange={(e) => setEmailMessage(e.target.value)}
+                    placeholder="Primjer: Dragi {ime}, ..."
+                    rows={8}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    Placeholderi: <code>{'{ime}'}</code>, <code>{'{korisnicko_ime}'}</code>, <code>{'{name}'}</code>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
                 <button
                   onClick={() => setShowEmailModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
+                  Otkazi
+                </button>
+                <button
+                  onClick={handleSendEmail}
+                  disabled={sendingEmail}
+                  className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors disabled:opacity-50"
+                >
+                  <PaperAirplaneIcon className="h-5 w-5" />
+                  {sendingEmail ? 'Saljem...' : 'Posalji'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showClientDetails && selectedClient && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-900">Detalji klijenta</h3>
+                <button onClick={() => setShowClientDetails(false)} className="text-gray-400 hover:text-gray-600">
                   <XMarkIcon className="h-6 w-6" />
                 </button>
               </div>
-              <AutoSaveIndicator status={autoSaveStatus} lastSaved={lastSaved} />
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Naslov
-                </label>
-                <input
-                  type="text"
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  placeholder="Unesite naslov email-a"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Poruka
-                </label>
-                <textarea
-                  value={emailMessage}
-                  onChange={(e) => setEmailMessage(e.target.value)}
-                  placeholder="Unesite poruku..."
-                  rows={8}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => setShowEmailModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Otkaži
-              </button>
-              <button
-                onClick={handleSendEmail}
-                disabled={sendingEmail}
-                className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors disabled:opacity-50"
-              >
-                <PaperAirplaneIcon className="h-5 w-5" />
-                {sendingEmail ? 'Šaljem...' : 'Pošalji'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Client Details Modal */}
-      {showClientDetails && selectedClient && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-gray-900">
-                Detalji klijenta
-              </h3>
-              <button
-                onClick={() => setShowClientDetails(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
-            </div>
-            <div className="p-6 space-y-6">
-              {/* Client Info */}
-              <div className="flex items-center gap-4">
-                {selectedClient.client.avatar ? (
-                  <img src={selectedClient.client.avatar} alt={selectedClient.client.name} className="h-16 w-16 rounded-full" />
-                ) : (
-                  <div className="h-16 w-16 rounded-full bg-pink-100 flex items-center justify-center">
-                    <UserIcon className="h-8 w-8 text-pink-600" />
-                  </div>
-                )}
-                <div>
-                  <h4 className="text-lg font-bold text-gray-900">{selectedClient.client.name}</h4>
-                  <p className="text-gray-600">{selectedClient.client.email}</p>
-                  {selectedClient.client.phone && (
-                    <p className="text-gray-600">{selectedClient.client.phone}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <p className="text-sm text-blue-600 font-medium">Ukupno termina</p>
-                  <p className="text-2xl font-bold text-blue-900">{selectedClient.stats.total_appointments}</p>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4">
-                  <p className="text-sm text-green-600 font-medium">Završeno</p>
-                  <p className="text-2xl font-bold text-green-900">{selectedClient.stats.completed_appointments}</p>
-                </div>
-                <div className="bg-red-50 rounded-lg p-4">
-                  <p className="text-sm text-red-600 font-medium">Otkazano</p>
-                  <p className="text-2xl font-bold text-red-900">{selectedClient.stats.cancelled_appointments}</p>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-4">
-                  <p className="text-sm text-purple-600 font-medium">Ukupno potrošeno</p>
-                  <p className="text-2xl font-bold text-purple-900">{formatCurrency(selectedClient.stats.total_spent)}</p>
-                </div>
-              </div>
-
-              {/* Appointments History */}
-              <div>
-                <h5 className="text-lg font-bold text-gray-900 mb-4">Istorija termina</h5>
-                <div className="space-y-3">
-                  {selectedClient.appointments
-                    .sort((a, b) => {
-                      // Sort by date descending (newest first)
-                      const dateA = new Date(a.date.split('.').reverse().join('-'));
-                      const dateB = new Date(b.date.split('.').reverse().join('-'));
-                      
-                      if (dateA.getTime() !== dateB.getTime()) {
-                        return dateB.getTime() - dateA.getTime();
-                      }
-                      
-                      // If same date, sort by time descending
-                      return b.time.localeCompare(a.time);
-                    })
-                    .map((appointment) => (
-                    <div key={appointment.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {formatDate(appointment.date)} u {appointment.time}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {appointment.services.join(', ')}
-                          </p>
-                          {appointment.staff && (
-                            <p className="text-sm text-gray-500">Radnik: {appointment.staff}</p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                            appointment.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            appointment.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                            appointment.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {appointment.status === 'completed' ? 'Završeno' :
-                             appointment.status === 'confirmed' ? 'Potvrđeno' :
-                             appointment.status === 'cancelled' ? 'Otkazano' :
-                             appointment.status}
-                          </span>
-                          <p className="font-bold text-gray-900 mt-1">{formatCurrency(appointment.total_price)}</p>
-                        </div>
-                      </div>
-                      {appointment.notes && (
-                        <p className="text-sm text-gray-600 mt-2 italic">Napomena: {appointment.notes}</p>
-                      )}
+              <div className="p-6 space-y-6">
+                <div className="flex items-center gap-4">
+                  {selectedClient.client.avatar ? (
+                    <img src={selectedClient.client.avatar} alt={selectedClient.client.name} className="h-16 w-16 rounded-full object-cover" />
+                  ) : (
+                    <div className="h-16 w-16 rounded-full bg-pink-100 flex items-center justify-center">
+                      <UserIcon className="h-8 w-8 text-pink-600" />
                     </div>
-                  ))}
+                  )}
+                  <div>
+                    <h4 className="text-lg font-bold text-gray-900">{selectedClient.client.name}</h4>
+                    <p className="text-gray-600">{selectedClient.client.email || '-'}</p>
+                    {selectedClient.client.phone && <p className="text-gray-600">{selectedClient.client.phone}</p>}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <p className="text-sm text-blue-700 font-medium">Ukupno termina</p>
+                    <p className="text-2xl font-bold text-blue-900">{selectedClient.stats.total_appointments}</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <p className="text-sm text-green-700 font-medium">Zavrseno</p>
+                    <p className="text-2xl font-bold text-green-900">{selectedClient.stats.completed_appointments}</p>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-4">
+                    <p className="text-sm text-red-700 font-medium">Otkazano</p>
+                    <p className="text-2xl font-bold text-red-900">{selectedClient.stats.cancelled_appointments}</p>
+                  </div>
+                  <div className="bg-purple-50 rounded-lg p-4">
+                    <p className="text-sm text-purple-700 font-medium">Ukupno potroseno</p>
+                    <p className="text-2xl font-bold text-purple-900">{formatCurrency(selectedClient.stats.total_spent)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="text-lg font-bold text-gray-900 mb-4">Istorija termina</h5>
+                  <div className="space-y-3">
+                    {selectedClient.appointments.map((appointment) => (
+                      <div key={appointment.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {formatDate(appointment.date)} u {appointment.time}
+                            </p>
+                            <p className="text-sm text-gray-600">{appointment.services.join(', ')}</p>
+                            {appointment.staff && <p className="text-sm text-gray-500">Zaposleni: {appointment.staff}</p>}
+                          </div>
+                          <div className="text-right">
+                            <span
+                              className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                                appointment.status === 'completed'
+                                  ? 'bg-green-100 text-green-800'
+                                  : appointment.status === 'confirmed'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : appointment.status === 'cancelled'
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-gray-100 text-gray-800'
+                              }`}
+                            >
+                              {appointment.status}
+                            </span>
+                            <p className="font-bold text-gray-900 mt-1">{formatCurrency(appointment.total_price)}</p>
+                          </div>
+                        </div>
+                        {appointment.notes && <p className="text-sm text-gray-600 italic">Napomena: {appointment.notes}</p>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
     </>
   );
 }

@@ -312,6 +312,16 @@ export const staffAPI = {
     return response.data;
   },
 
+  getCalendarLinks: async () => {
+    const response = await api.get('/staff/me/calendar-links');
+    return response.data;
+  },
+
+  regenerateCalendarLink: async () => {
+    const response = await api.post('/staff/me/calendar-links/regenerate');
+    return response.data;
+  },
+
   // Get current staff profile (for frizeri)
   getMyProfile: async () => {
     const response = await api.get('/user');
@@ -1272,9 +1282,9 @@ export const clientAPI = {
     return response.data;
   },
   
-  // Send email to client
-  sendEmail: async (id: string, data: { subject: string; message: string }) => {
-    const response = await api.post(`/clients/${id}/send-email`, data);
+  // Send email to selected clients
+  sendEmail: async (data: { client_ids: number[]; subject: string; message: string }) => {
+    const response = await api.post('/clients/send-email', data);
     return response.data;
   }
 };

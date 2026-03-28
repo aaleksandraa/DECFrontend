@@ -1,7 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, User, Lock, Bell, Calendar, Eye, EyeOff, CheckCircle, Camera, Plus, X, Briefcase, Award, Globe, Star, Instagram, ExternalLink } from 'lucide-react';
+import { Save, User, Lock, Bell, Calendar, Eye, EyeOff, CheckCircle, Camera, Plus, X, Briefcase, Award, Globe, Star, Instagram, ExternalLink, Copy, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { authAPI, staffAPI } from '../../services/api';
+
+type CalendarLinks = {
+  feed_url: string;
+  webcal_url: string;
+  google_import_url: string;
+  outlook_import_url: string;
+  ios_import_url: string;
+  token_generated_at?: string | null;
+};
 
 export function FrizerSettings() {
   const { user, updateUser, refreshUser } = useAuth();
@@ -68,6 +77,10 @@ export function FrizerSettings() {
   
   // Settings form
   const [autoConfirm, setAutoConfirm] = useState(user?.staff_profile?.auto_confirm || false);
+  const [calendarLinks, setCalendarLinks] = useState<CalendarLinks | null>(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarRegenerating, setCalendarRegenerating] = useState(false);
+  const [copiedField, setCopiedField] = useState<'feed' | 'webcal' | null>(null);
   
   // Password form
   const [passwordData, setPasswordData] = useState({
@@ -121,6 +134,61 @@ export function FrizerSettings() {
       }
     }
   }, [user]);
+
+  const loadCalendarLinks = async () => {
+    if (!user || user.role !== 'frizer') return;
+
+    try {
+      setCalendarLoading(true);
+      const response = await staffAPI.getCalendarLinks();
+      setCalendarLinks(response.calendar);
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error?.response?.data?.message || 'Greška pri učitavanju linka za kalendar.',
+      });
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
+
+  const handleRegenerateCalendarLink = async () => {
+    try {
+      setCalendarRegenerating(true);
+      const response = await staffAPI.regenerateCalendarLink();
+      setCalendarLinks(response.calendar);
+      setMessage({
+        type: 'success',
+        text: 'Link za kalendar je uspješno regenerisan.',
+      });
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error?.response?.data?.message || 'Greška pri regenerisanju kalendar linka.',
+      });
+    } finally {
+      setCalendarRegenerating(false);
+    }
+  };
+
+  const copyCalendarLink = async (value: string, field: 'feed' | 'webcal') => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch {
+      setMessage({
+        type: 'error',
+        text: 'Kopiranje nije uspjelo. Kopirajte link ručno.',
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'appointments') {
+      loadCalendarLinks();
+    }
+  }, [activeTab, user?.id]);
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
@@ -984,6 +1052,106 @@ export function FrizerSettings() {
                       </p>
                     </div>
                   </div>
+                </div>
+
+                <div className="p-6 rounded-xl border border-purple-200 bg-purple-50/40">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900">Povezivanje sa kalendarima</h4>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Dodajte termine u Google, iOS (Apple) ili Outlook kalendar preko pretplatničkog linka.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRegenerateCalendarLink}
+                      disabled={calendarRegenerating || calendarLoading}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-purple-300 bg-white text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${calendarRegenerating ? 'animate-spin' : ''}`} />
+                      Regeneriši link
+                    </button>
+                  </div>
+
+                  {calendarLoading ? (
+                    <div className="text-sm text-gray-600">Učitavanje kalendar linkova...</div>
+                  ) : calendarLinks ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">iCal / ICS link</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={calendarLinks.feed_url}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-xs sm:text-sm text-gray-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => copyCalendarLink(calendarLinks.feed_url, 'feed')}
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700"
+                          >
+                            <Copy className="w-4 h-4" />
+                            {copiedField === 'feed' ? 'Kopirano' : 'Kopiraj'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Apple webcal link</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={calendarLinks.webcal_url}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-xs sm:text-sm text-gray-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => copyCalendarLink(calendarLinks.webcal_url, 'webcal')}
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700"
+                          >
+                            <Copy className="w-4 h-4" />
+                            {copiedField === 'webcal' ? 'Kopirano' : 'Kopiraj'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <a
+                          href={calendarLinks.google_import_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium"
+                        >
+                          Google Calendar
+                        </a>
+                        <a
+                          href={calendarLinks.outlook_import_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium"
+                        >
+                          Outlook Calendar
+                        </a>
+                        <a
+                          href={calendarLinks.ios_import_url}
+                          className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium"
+                        >
+                          Apple iOS Calendar
+                        </a>
+                      </div>
+
+                      <div className="text-xs text-gray-600 leading-5 bg-white border border-gray-200 rounded-lg p-3">
+                        iOS: otvorite Apple Calendar, izaberite Add Subscription Calendar i zalijepite webcal link.
+                        Google/Outlook: kliknite dugme iznad ili zalijepite iCal link ručno.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-600">
+                      Kalendar link još nije dostupan. Kliknite “Regeneriši link”.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

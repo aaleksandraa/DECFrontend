@@ -22,7 +22,8 @@ import {
   ClockIcon,
   ChartBarIcon,
   WrenchScrewdriverIcon,
-  CreditCardIcon
+  CreditCardIcon,
+  ChatBubbleOvalLeftEllipsisIcon
 } from '@heroicons/react/24/outline';
 import { ScissorsIcon } from '@heroicons/react/24/solid';
 
@@ -72,7 +73,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
 
   // Public navigation links (for guests)
   const publicLinks = [
-    { path: '/', label: 'Početna', icon: HomeIcon },
+    { path: '/', label: 'PoÄetna', icon: HomeIcon },
     { path: '/pretraga', label: 'Pretraga', icon: MagnifyingGlassIcon },
     { path: '/cjenovnik', label: 'Cjenovnik', icon: CreditCardIcon },
     { path: '/o-nama', label: 'O nama', icon: UserCircleIcon },
@@ -81,7 +82,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
 
   // Client navigation links (for logged in clients)
   const clientLinks = [
-    { path: '/', label: 'Početna', icon: HomeIcon },
+    { path: '/', label: 'PoÄetna', icon: HomeIcon },
     { path: '/pretraga', label: 'Pretraga', icon: MagnifyingGlassIcon },
     { path: '/moji-termini', label: 'Moji termini', icon: CalendarDaysIcon },
     { path: '/omiljeni-saloni', label: 'Omiljeni saloni', icon: HeartIcon },
@@ -106,7 +107,8 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
     { id: 'analytics', label: 'Analitika', icon: ChartBarIcon },
     { id: 'reviews', label: 'Recenzije', icon: StarIcon },
     { id: 'clients', label: 'Klijenti', icon: UserCircleIcon },
-    { id: 'settings', label: 'Podešavanja', icon: Cog6ToothIcon }
+    { id: 'social-integrations', label: 'Instagram/Facebook', icon: ChatBubbleOvalLeftEllipsisIcon },
+    { id: 'settings', label: 'PodeÅ¡avanja', icon: Cog6ToothIcon }
   ];
 
   // Dashboard links for staff/frizer (mobile menu)
@@ -117,7 +119,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
     { id: 'reviews', label: 'Recenzije', icon: StarIcon },
     { id: 'analytics', label: 'Analitika', icon: ChartBarIcon },
     { id: 'clients', label: 'Klijenti', icon: UserCircleIcon },
-    { id: 'settings', label: 'Podešavanja', icon: Cog6ToothIcon }
+    { id: 'settings', label: 'PodeÅ¡avanja', icon: Cog6ToothIcon }
   ];
 
   // Dashboard links for admin (mobile menu)
@@ -125,8 +127,9 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
     { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
     { id: 'salons', label: 'Svi saloni', icon: MapPinIcon },
     { id: 'users', label: 'Korisnici', icon: UsersIcon },
+    { id: 'social-health', label: 'Social Health', icon: ChatBubbleOvalLeftEllipsisIcon },
     { id: 'analytics', label: 'Analitika', icon: ChartBarIcon },
-    { id: 'settings', label: 'Podešavanja', icon: Cog6ToothIcon }
+    { id: 'settings', label: 'PodeÅ¡avanja', icon: Cog6ToothIcon }
   ];
 
   // Get dashboard links based on role
@@ -474,7 +477,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
                     <div className="fixed sm:absolute right-2 sm:right-0 left-2 sm:left-auto mt-2 sm:w-96 bg-white rounded-xl shadow-lg border border-gray-200 z-[100] max-h-96 overflow-hidden">
                       <div className="p-4 border-b border-gray-200">
                         <div className="flex items-center justify-between">
-                          <h3 className="font-semibold text-gray-900">Obavještenja</h3>
+                          <h3 className="font-semibold text-gray-900">ObavjeÅ¡tenja</h3>
                           <button 
                             onClick={() => setShowNotifications(false)}
                             className="p-1 rounded-full hover:bg-gray-100"
@@ -483,7 +486,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
                           </button>
                         </div>
                         {unreadCount > 0 && (
-                          <p className="text-sm text-gray-600 mt-1">{unreadCount} nepročitanih</p>
+                          <p className="text-sm text-gray-600 mt-1">{unreadCount} neproÄitanih</p>
                         )}
                       </div>
                       
@@ -491,7 +494,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
                         {loading ? (
                           <div className="p-8 text-center">
                             <div className="w-6 h-6 border-2 border-orange-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                            <p className="text-gray-500">Učitavanje...</p>
+                            <p className="text-gray-500">UÄitavanje...</p>
                           </div>
                         ) : notifications.length > 0 ? (
                           notifications.map(notification => {
@@ -527,7 +530,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
                         ) : (
                           <div className="p-8 text-center">
                             <BellIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                            <p className="text-gray-500">Nema novih obavještenja</p>
+                            <p className="text-gray-500">Nema novih obavjeÅ¡tenja</p>
                           </div>
                         )}
                       </div>
@@ -538,7 +541,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
                             onClick={markAllAsRead}
                             className="w-full text-center text-orange-600 hover:text-orange-700 font-medium text-sm"
                           >
-                            Označi sve kao pročitano
+                            OznaÄi sve kao proÄitano
                           </button>
                         </div>
                       )}
@@ -648,7 +651,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
                             className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
                           >
                             <HomeIcon className="w-4 h-4 text-gray-500" />
-                            <span className="text-gray-700">Početna</span>
+                            <span className="text-gray-700">PoÄetna</span>
                           </Link>
                           <Link
                             to="/pretraga"
@@ -691,7 +694,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
                           </Link>
                         )}
 
-                        {/* Početna stranica - for non-clients on dashboard pages */}
+                        {/* PoÄetna stranica - for non-clients on dashboard pages */}
                         {!isClient && isDashboardPage && (
                           <>
                             <Link
@@ -700,7 +703,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
                               className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
                             >
                               <HomeIcon className="w-4 h-4 text-gray-500" />
-                              <span className="text-gray-700">Početna stranica</span>
+                              <span className="text-gray-700">PoÄetna stranica</span>
                             </Link>
                             <Link
                               to="/o-nama"
@@ -736,7 +739,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
                           </>
                         )}
                         
-                        {/* Podešavanja - only for clients (salon/frizer/admin have it in dashboardLinks) */}
+                        {/* PodeÅ¡avanja - only for clients (salon/frizer/admin have it in dashboardLinks) */}
                         {isClient && (
                           <Link
                             to="/dashboard?section=settings"
@@ -744,7 +747,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
                             className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
                           >
                             <Cog6ToothIcon className="w-4 h-4 text-gray-500" />
-                            <span className="text-gray-700">Podešavanja</span>
+                            <span className="text-gray-700">PodeÅ¡avanja</span>
                           </Link>
                         )}
                       </div>
@@ -826,3 +829,5 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({ transparent = false }) =
 };
 
 export default MainNavbar;
+
+

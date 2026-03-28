@@ -842,7 +842,13 @@ export const CityPage: React.FC = () => {
                     const distance = getDistance(salon);
                     const salonRating = salon.average_rating || salon.rating || 0;
                     const salonReviewCount = salon.reviews_count || salon.review_count || 0;
-                    const primaryImage = salon.images?.find(img => img.is_primary)?.url || salon.images?.[0]?.url;
+                    const primaryImage =
+                      [
+                        salon.images?.find((img) => img.is_primary)?.url,
+                        salon.images?.[0]?.url,
+                        salon.cover_image_url,
+                        salon.image_url,
+                      ].find((img): img is string => Boolean(img && img.trim().length > 0)) || null;
                     const todayHours = getTodayWorkingHours(salon);
                     
                     return (

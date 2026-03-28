@@ -64,6 +64,8 @@ export interface Salon {
     children: boolean;
   };
   images: SalonImage[];
+  image_url?: string | null;
+  cover_image_url?: string | null;
   rating: number;
   review_count: number;
   working_hours: {

@@ -40,6 +40,7 @@ export function Sidebar({ activeSection, onSectionChange, isPendingSalon = false
           { id: 'users', label: 'Korisnici', icon: Users },
           { id: 'import', label: 'Import Termina', icon: Upload },
           { id: 'widgets', label: 'Widget Sistem', icon: Code },
+          { id: 'social-health', label: 'Social Health', icon: MessageCircle },
           { id: 'consents', label: 'GDPR Pristanci', icon: ShieldCheck },
           { id: 'job-ads', label: 'Oglasi za posao', icon: Briefcase },
           { id: 'homepage-categories', label: 'Kategorije', icon: Grid },

@@ -43,6 +43,7 @@ import { AdminWidgetManagement } from '../Admin/AdminWidgetManagement';
 import { AdminImportAppointments } from '../Admin/AdminImportAppointments';
 import { AdminImportHistory } from '../Admin/AdminImportHistory';
 import AdminHomepageCategories from '../Admin/AdminHomepageCategories';
+import { AdminSocialIntegrationsHealth } from '../Admin/AdminSocialIntegrationsHealth';
 
 // Frizer components
 import { FrizerCalendar } from '../Frizer/FrizerCalendar';
@@ -122,6 +123,7 @@ export function Dashboard() {
           case 'import': return <AdminImportAppointments />;
           case 'import-history': return <AdminImportHistory />;
           case 'widgets': return <AdminWidgetManagement />;
+          case 'social-health': return <AdminSocialIntegrationsHealth />;
           case 'consents': return <AdminConsents />;
           case 'job-ads': return <AdminJobAds />;
           case 'homepage-categories': return <AdminHomepageCategories />;
