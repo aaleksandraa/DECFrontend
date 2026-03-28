@@ -1,7 +1,34 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const stripApiV1Suffix = (url: string): string => {
+  return url.replace(/\/api\/v1\/?$/i, '');
+};
+
+const getRuntimeApiBaseUrl = (): string | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const host = window.location.hostname.toLowerCase();
+
+  // Domain-safe routing: test frontend always uses test API, production stays production.
+  if (host === 'wizionar.space' || host.endsWith('.wizionar.space')) {
+    return 'https://api.wizionar.space';
+  }
+
+  if (host === 'frizerino.com' || host.endsWith('.frizerino.com')) {
+    return 'https://api.frizerino.com';
+  }
+
+  return null;
+};
+
+const envApiUrl = (import.meta.env.VITE_API_URL || '').trim();
+const envApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
+const runtimeApiBaseUrl = getRuntimeApiBaseUrl();
+
+const API_BASE_URL = runtimeApiBaseUrl || envApiBaseUrl || (envApiUrl ? stripApiV1Suffix(envApiUrl) : 'http://localhost:8000');
+const API_URL = runtimeApiBaseUrl ? `${runtimeApiBaseUrl}/api/v1` : (envApiUrl || `${API_BASE_URL}/api/v1`);
 let runtimeAuthToken: string | null = null;
 
 export const setRuntimeAuthToken = (token: string | null): void => {
