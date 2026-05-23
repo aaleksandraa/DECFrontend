@@ -11,7 +11,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { appointmentAPI, staffAPI, serviceAPI } from '../../services/api';
+import { appointmentAPI, staffAPI, serviceAPI, scheduleAPI } from '../../services/api';
 import { formatDateEuropean, getCurrentDateEuropean } from '../../utils/dateUtils';
 import { ClientDetailsModal } from '../Common/ClientDetailsModal';
 import { MultiServiceManualBookingModal } from '../Common/MultiServiceManualBookingModal';
@@ -25,6 +25,8 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
   const [appointments, setAppointments] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
+  const [salonBreaks, setSalonBreaks] = useState<any[]>([]);
+  const [staffBreaks, setStaffBreaks] = useState<{ [key: string]: any[] }>({});
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -95,6 +97,19 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
       setAppointments(salonAppointments);
       setStaff(staffArray);
       setServices(servicesArray);
+
+      const [salonBreaksData, staffBreaksEntries] = await Promise.all([
+        scheduleAPI.getSalonBreaks(user.salon.id).catch(() => ({ breaks: [] })),
+        Promise.all(
+          staffArray.map(async (staffMember: any) => {
+            const breaksData = await scheduleAPI.getStaffBreaks(staffMember.id).catch(() => ({ breaks: [] }));
+            return [staffMember.id, breaksData.breaks || []] as const;
+          })
+        )
+      ]);
+
+      setSalonBreaks(salonBreaksData.breaks || []);
+      setStaffBreaks(Object.fromEntries(staffBreaksEntries));
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -148,6 +163,71 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
 
   const formatHourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:00h`;
   const formatHalfHourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:30h`;
+
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+  const toDateOnly = (value: string) => {
+    const normalized = value.includes('.')
+      ? value.split('.').reverse().join('-')
+      : value;
+    const date = new Date(normalized);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
+  const breakAppliesToDate = (breakItem: any, date: Date) => {
+    if (breakItem.is_active === false) return false;
+
+    const dateOnly = new Date(date);
+    dateOnly.setHours(0, 0, 0, 0);
+    const dayKey = dayNames[date.getDay()];
+
+    if (breakItem.type === 'daily') return true;
+    if (breakItem.type === 'weekly') return breakItem.days?.includes(dayKey);
+    if (breakItem.type === 'specific_date' && breakItem.date) {
+      return toDateOnly(breakItem.date).getTime() === dateOnly.getTime();
+    }
+    if (breakItem.type === 'date_range' && breakItem.start_date && breakItem.end_date) {
+      return dateOnly >= toDateOnly(breakItem.start_date) && dateOnly <= toDateOnly(breakItem.end_date);
+    }
+
+    return false;
+  };
+
+  const getActiveBreaksForSlot = (date: Date, hour: number, minute: number) => {
+    const slotStartMinutes = hour * 60 + minute;
+    const slotEndMinutes = slotStartMinutes + 30;
+    const activeBreaks = [
+      ...salonBreaks,
+      ...(selectedStaff !== 'all' ? staffBreaks[selectedStaff] || [] : [])
+    ];
+
+    return activeBreaks.filter((breakItem) => {
+      if (!breakAppliesToDate(breakItem, date) || !breakItem.start_time || !breakItem.end_time) return false;
+
+      const [startHour, startMinute = 0] = breakItem.start_time.split(':').map(Number);
+      const [endHour, endMinute = 0] = breakItem.end_time.split(':').map(Number);
+      const breakStartMinutes = startHour * 60 + startMinute;
+      const breakEndMinutes = endHour * 60 + endMinute;
+
+      return breakStartMinutes < slotEndMinutes && breakEndMinutes > slotStartMinutes;
+    });
+  };
+
+  const getBreakStyle = (breakItem: any, slotHour: number, slotMinute: number) => {
+    const [startHour, startMinute = 0] = breakItem.start_time.split(':').map(Number);
+    const [endHour, endMinute = 0] = breakItem.end_time.split(':').map(Number);
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+    const slotStartMinutes = slotHour * 60 + slotMinute;
+    const offsetPercent = ((startMinutes - slotStartMinutes) / 30) * 100;
+    const heightPercent = ((endMinutes - startMinutes) / 30) * 100;
+
+    return {
+      top: `${Math.max(0, offsetPercent)}%`,
+      height: `${heightPercent}%`,
+    };
+  };
 
   // Get working hours from salon or selected staff (earliest/latest across all days for week view)
   const getWorkingHours = () => {
@@ -626,6 +706,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                   {/* Day columns */}
                   {weekDays.map((day, dayIndex) => {
                     const slotAppointments = getAppointmentsForSlot(day, slot.hour, slot.minute);
+                    const slotBreaks = getActiveBreaksForSlot(day, slot.hour, slot.minute);
                     const isToday = formatDateEuropean(day) === getCurrentDateEuropean();
                     const isWorkingHour = isWithinWorkingHours(day, slot.hour, slot.minute);
 
@@ -638,12 +719,25 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                           isToday ? 'bg-blue-50/50' : ''
                         } ${!isWorkingHour ? 'bg-gray-100' : ''}`}
                       >
-                        {/* Show "Zatvoreno" ONLY when NOT working hours AND no appointments */}
-                        {!isWorkingHour && slot.minute === 0 && slotAppointments.length === 0 && (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-xs text-gray-400">Zatvoreno</span>
-                          </div>
-                        )}
+                        {/* Show explicit breaks/custom schedule blocks only. Available empty slots stay blank. */}
+                        {slotBreaks.map((breakItem) => {
+                          const breakStartMinutes = parseInt(breakItem.start_time.split(':')[0]) * 60 + parseInt(breakItem.start_time.split(':')[1]);
+                          const slotStartMinutes = slot.hour * 60 + slot.minute;
+                          if (breakStartMinutes !== slotStartMinutes) return null;
+
+                          return (
+                            <div
+                              key={`break-${breakItem.id}`}
+                              className="absolute left-1.5 right-1.5 rounded-md border border-amber-200 bg-amber-50/95 px-2 py-1.5 text-amber-900 shadow-sm overflow-hidden"
+                              style={getBreakStyle(breakItem, slot.hour, slot.minute)}
+                            >
+                              <div className="text-[11px] font-semibold truncate">{breakItem.title || 'Pauza'}</div>
+                              <div className="text-[10px] text-amber-700 truncate">
+                                {breakItem.start_time} - {breakItem.end_time}
+                              </div>
+                            </div>
+                          );
+                        })}
                         
                         {/* Show appointments */}
                         {slotAppointments.map((appointment) => {
