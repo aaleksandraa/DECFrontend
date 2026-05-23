@@ -605,22 +605,15 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                 return (
                 <div 
                   key={`${slot.hour}-${slot.minute}`} 
-                  className={`grid grid-cols-[88px_repeat(7,minmax(96px,1fr))] transition-all bg-white ${
-                    isHourSlot 
-                      ? 'border-t border-gray-200' 
-                      : 'border-t border-dashed border-gray-100'
-                  }`} 
+                  className="grid grid-cols-[88px_repeat(7,minmax(96px,1fr))] transition-all bg-white" 
                   style={{ minHeight: '70px' }}
                 >
                   {/* Time axis */}
                   <div className="relative border-r border-gray-200 sticky left-0 z-10 bg-white">
                     {isHourSlot && (
-                      <div className="absolute left-0 right-0 top-2 flex items-center gap-2 px-3">
-                        <span className="shrink-0 text-[13px] font-semibold text-gray-600 tabular-nums">
-                          {slot.label}
-                        </span>
-                        <span className="h-px flex-1 bg-gray-300" aria-hidden="true" />
-                      </div>
+                      <span className="absolute right-3 top-0 -translate-y-1/2 bg-white pr-1 text-[13px] font-semibold text-gray-600 tabular-nums">
+                        {slot.label}
+                      </span>
                     )}
                   </div>
 
@@ -634,6 +627,8 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                       <div
                         key={dayIndex}
                         className={`relative border-r border-gray-200 last:border-r-0 transition-colors ${
+                          isHourSlot ? 'border-t border-gray-200' : 'border-t border-dashed border-gray-100'
+                        } ${
                           isToday ? 'bg-blue-50/50' : ''
                         } ${!isWorkingHour ? 'bg-gray-100' : ''}`}
                       >
