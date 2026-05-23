@@ -153,6 +153,7 @@ export function FrizerCalendarWeekView({ onViewChange }: FrizerCalendarWeekViewP
   };
 
   const formatHourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:00h`;
+  const formatHalfHourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:30h`;
 
   const getWorkingHours = () => {
     if (user?.staff_profile && 'working_hours' in user.staff_profile && user.staff_profile.working_hours) {
@@ -494,19 +495,24 @@ export function FrizerCalendarWeekView({ onViewChange }: FrizerCalendarWeekViewP
 
             {/* Time slots - 30 minute intervals */}
             <div className="relative">
-              {timeSlots.map((slot) => {
+              {timeSlots.map((slot, slotIndex) => {
                 const isHourSlot = slot.minute === 0;
+                const isFirstSlot = slotIndex === 0;
                 return (
                 <div 
                   key={`${slot.hour}-${slot.minute}`} 
                   className="grid grid-cols-[88px_repeat(7,minmax(96px,1fr))] transition-all bg-white" 
-                  style={{ minHeight: '70px' }}
+                  style={{ minHeight: '70px', paddingTop: isFirstSlot ? '18px' : undefined }}
                 >
                   {/* Time axis */}
                   <div className="relative border-r border-gray-200 sticky left-0 z-10 bg-white">
-                    {isHourSlot && (
+                    {isHourSlot ? (
                       <span className="absolute right-3 top-0 -translate-y-1/2 bg-white pr-1 text-[13px] font-semibold text-gray-600 tabular-nums">
                         {slot.label}
+                      </span>
+                    ) : (
+                      <span className="absolute right-3 top-0 -translate-y-1/2 bg-white pr-1 text-[11px] font-medium text-gray-400 tabular-nums">
+                        {formatHalfHourLabel(slot.hour)}
                       </span>
                     )}
                   </div>
