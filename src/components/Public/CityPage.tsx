@@ -239,7 +239,7 @@ export const CityPage: React.FC = () => {
 
           setMeta({
             title: `${category.name} - ${category.description} | Frizerino`,
-            description: `${category.description} PronaÄ‘ite najbolje ${category.name.toLowerCase()} salone u Bosni i Hercegovini. Online zakazivanje termina.`,
+            description: `${category.description} Pronađite najbolje ${category.name.toLowerCase()} salone u Bosni i Hercegovini. Online zakazivanje termina.`,
             keywords: category.keywords,
             canonical: `/saloni/${categorySlug}`
           });
