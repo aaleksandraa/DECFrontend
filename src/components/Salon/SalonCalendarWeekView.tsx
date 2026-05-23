@@ -132,6 +132,22 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
     return new Date(d.setDate(diff));
   }
 
+  const getHourBounds = (startTime?: string, endTime?: string) => {
+    if (!startTime || !endTime) return null;
+
+    const [startHour, startMinute = 0] = startTime.split(':').map(Number);
+    const [endHour, endMinute = 0] = endTime.split(':').map(Number);
+
+    if ([startHour, startMinute, endHour, endMinute].some(Number.isNaN)) return null;
+
+    return {
+      start: startHour,
+      end: endHour + (endMinute > 0 ? 1 : 0),
+    };
+  };
+
+  const formatHourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:00h`;
+
   // Get working hours from salon or selected staff (earliest/latest across all days for week view)
   const getWorkingHours = () => {
     // If specific staff is selected, use their working hours
@@ -145,10 +161,10 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
         
         Object.values(hours).forEach((day: any) => {
           if (day?.is_working && day.start && day.end) {
-            const startHour = parseInt(day.start.split(':')[0]);
-            const endHour = parseInt(day.end.split(':')[0]);
-            if (startHour < earliestStart) earliestStart = startHour;
-            if (endHour > latestEnd) latestEnd = endHour;
+            const bounds = getHourBounds(day.start, day.end);
+            if (!bounds) return;
+            if (bounds.start < earliestStart) earliestStart = bounds.start;
+            if (bounds.end > latestEnd) latestEnd = bounds.end;
           }
         });
         
@@ -166,10 +182,10 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
       
       Object.values(hours).forEach((day: any) => {
         if (day?.is_open && day.open && day.close) {
-          const startHour = parseInt(day.open.split(':')[0]);
-          const endHour = parseInt(day.close.split(':')[0]);
-          if (startHour < earliestStart) earliestStart = startHour;
-          if (endHour > latestEnd) latestEnd = endHour;
+          const bounds = getHourBounds(day.open, day.close);
+          if (!bounds) return;
+          if (bounds.start < earliestStart) earliestStart = bounds.start;
+          if (bounds.end > latestEnd) latestEnd = bounds.end;
         }
       });
       
@@ -241,7 +257,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
   const generateTimeSlots = () => {
     const slots = [];
     for (let hour = workingHoursStart; hour < workingHoursEnd; hour++) {
-      slots.push({ hour, minute: 0, label: `${String(hour).padStart(2, '0')}:00` });
+      slots.push({ hour, minute: 0, label: formatHourLabel(hour) });
       slots.push({ hour, minute: 30, label: `${String(hour).padStart(2, '0')}:30` });
     }
     return slots;
@@ -541,8 +557,8 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
         <div className="overflow-x-auto">
           <div className="min-w-[800px]">
             {/* Header with days */}
-            <div className="grid grid-cols-8 border-b-2 border-gray-200 bg-gray-50">
-              <div className="p-4 text-sm font-bold text-gray-600 border-r border-gray-200 sticky left-0 bg-gray-50 z-20">
+            <div className="grid grid-cols-[88px_repeat(7,minmax(96px,1fr))] border-b-2 border-gray-200 bg-gray-50">
+              <div className="px-3 py-4 text-sm font-bold text-gray-600 border-r border-gray-200 sticky left-0 bg-gray-50 z-20">
                 Vrijeme
               </div>
               {weekDays.map((day, index) => {
@@ -585,23 +601,27 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
             {/* Time slots - 30 minute intervals */}
             <div className="relative">
               {timeSlots.map((slot) => {
+                const isHourSlot = slot.minute === 0;
                 return (
                 <div 
                   key={`${slot.hour}-${slot.minute}`} 
-                  className={`grid grid-cols-8 transition-all bg-white ${
-                    slot.minute === 0 
-                      ? 'border-b-2 border-gray-200' 
-                      : 'border-b border-dashed border-gray-100'
+                  className={`grid grid-cols-[88px_repeat(7,minmax(96px,1fr))] transition-all bg-white ${
+                    isHourSlot 
+                      ? 'border-t border-gray-200' 
+                      : 'border-t border-dashed border-gray-100'
                   }`} 
                   style={{ minHeight: '70px' }}
                 >
-                  {/* Time label - Clean styling */}
-                  <div className={`p-3 text-sm border-r border-gray-200 flex items-center sticky left-0 z-10 bg-white ${
-                    slot.minute === 0 
-                      ? 'text-gray-800 font-semibold' 
-                      : 'text-gray-500 font-normal'
-                  }`}>
-                    {slot.label}
+                  {/* Time axis */}
+                  <div className="relative border-r border-gray-200 sticky left-0 z-10 bg-white">
+                    {isHourSlot && (
+                      <div className="absolute left-0 right-0 top-2 flex items-center gap-2 px-3">
+                        <span className="shrink-0 text-[13px] font-semibold text-gray-600 tabular-nums">
+                          {slot.label}
+                        </span>
+                        <span className="h-px flex-1 bg-gray-300" aria-hidden="true" />
+                      </div>
+                    )}
                   </div>
 
                   {/* Day columns */}
