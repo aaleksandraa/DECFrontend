@@ -165,7 +165,56 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
     return false;
   };
 
-  const getActiveBreaksForDay = (staffId?: string) => {
+  const getNormalizedHours = (dayHours: any) => {
+    if (!dayHours) return null;
+
+    const openValue = dayHours.is_open ?? dayHours.is_working;
+    const isOpen = openValue === true || openValue === 1 || openValue === '1' || openValue === 'true';
+    const start = dayHours.open ?? dayHours.start;
+    const end = dayHours.close ?? dayHours.end;
+
+    if (!isOpen || !start || !end) return null;
+
+    return {
+      start: String(start).slice(0, 5),
+      end: String(end).slice(0, 5),
+    };
+  };
+
+  const getSalonWorkingMinutesForDate = (date: Date) => {
+    const dayKey = weekDayKeys[date.getDay()];
+    const salonHours = getNormalizedHours(user?.salon?.working_hours?.[dayKey]);
+
+    if (!salonHours) return null;
+
+    return {
+      start: timeToMinutes(salonHours.start),
+      end: timeToMinutes(salonHours.end),
+    };
+  };
+
+  const getStaffWorkingMinutesForDate = (staffId: string, date: Date) => {
+    const salonMinutes = getSalonWorkingMinutesForDate(date);
+    if (!salonMinutes) return null;
+
+    const dayKey = weekDayKeys[date.getDay()];
+    const staffMember = staff.find(s => String(s.id) === String(staffId));
+    const staffDayHours = staffMember?.working_hours?.[dayKey];
+
+    if (!staffDayHours) {
+      return salonMinutes;
+    }
+
+    const staffHours = getNormalizedHours(staffDayHours);
+    if (!staffHours) return null;
+
+    return {
+      start: Math.max(salonMinutes.start, timeToMinutes(staffHours.start)),
+      end: Math.min(salonMinutes.end, timeToMinutes(staffHours.end)),
+    };
+  };
+
+  const getActiveBreaksForDay = (staffId?: string, date: Date = selectedDate) => {
     const activeStaffId = staffId || getSelectedStaffId();
     const activeBreaks = [
       ...salonBreaks,
@@ -173,7 +222,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
     ];
 
     return activeBreaks.filter((breakItem) => (
-      breakAppliesToDate(breakItem, selectedDate) &&
+      breakAppliesToDate(breakItem, date) &&
       breakItem.start_time &&
       breakItem.end_time
     ));
@@ -182,40 +231,30 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   // Get working hours for the selected date
   const getWorkingHours = (staffId?: string) => {
     // Get day of week for selected date (0 = Sunday, 1 = Monday, etc.)
-    const dayOfWeek = selectedDate.getDay();
-    const dayKey = weekDayKeys[dayOfWeek];
-    
     const activeStaffId = staffId || getSelectedStaffId();
-    const salonHours = user?.salon?.working_hours?.[dayKey];
+    const salonMinutes = getSalonWorkingMinutesForDate(selectedDate);
 
-    if (!salonHours?.is_open || !salonHours.open || !salonHours.close) {
+    if (!salonMinutes) {
       return { start: 9, end: 9 };
     }
 
     // If specific staff is selected, use their working hours for this day
     if (activeStaffId !== 'all') {
-      const staffMember = staff.find(s => String(s.id) === String(activeStaffId));
-      if (staffMember?.working_hours && staffMember.working_hours[dayKey]) {
-        const dayHours = staffMember.working_hours[dayKey];
-        if (dayHours.is_working && dayHours.start && dayHours.end) {
-          return {
-            start: Math.max(timeToMinutes(salonHours.open), timeToMinutes(dayHours.start)) / 60,
-            end: Math.min(timeToMinutes(salonHours.close), timeToMinutes(dayHours.end)) / 60,
-          };
-        }
+      const staffMinutes = getStaffWorkingMinutesForDate(activeStaffId, selectedDate);
 
+      if (!staffMinutes || staffMinutes.start >= staffMinutes.end) {
         return { start: 9, end: 9 };
       }
 
       return {
-        start: timeToMinutes(salonHours.open) / 60,
-        end: timeToMinutes(salonHours.close) / 60,
+        start: staffMinutes.start / 60,
+        end: staffMinutes.end / 60,
       };
     }
     
     return {
-      start: timeToMinutes(salonHours.open) / 60,
-      end: timeToMinutes(salonHours.close) / 60,
+      start: salonMinutes.start / 60,
+      end: salonMinutes.end / 60,
     };
   };
 
@@ -276,37 +315,20 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
       dayAppointments = dayAppointments.filter(app => String(app.staff_id) === String(activeStaffId));
     }
     
-    // Get working hours for THIS specific day
-    const dayOfWeek = date.getDay();
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const dayKey = dayNames[dayOfWeek];
-    const salonHours = user?.salon?.working_hours?.[dayKey];
+    const salonMinutes = getSalonWorkingMinutesForDate(date);
+    if (!salonMinutes) return 'closed';
 
-    if (!salonHours?.is_open || !salonHours.open || !salonHours.close) {
-      return 'closed';
-    }
-
-    let dayWorkingStartMinutes = 9 * 60;
-    let dayWorkingEndMinutes = 17 * 60;
+    let dayWorkingStartMinutes = salonMinutes.start;
+    let dayWorkingEndMinutes = salonMinutes.end;
     
     // If specific staff is selected, use their working hours for this day
     if (activeStaffId !== 'all') {
-      const staffMember = staff.find(s => String(s.id) === String(activeStaffId));
-      const dayHours = staffMember?.working_hours?.[dayKey];
+      const staffMinutes = getStaffWorkingMinutesForDate(activeStaffId, date);
 
-      if (dayHours?.is_working && dayHours.start && dayHours.end) {
-        dayWorkingStartMinutes = Math.max(timeToMinutes(salonHours.open), timeToMinutes(dayHours.start));
-        dayWorkingEndMinutes = Math.min(timeToMinutes(salonHours.close), timeToMinutes(dayHours.end));
-      } else if (dayHours) {
-        return 'closed';
-      } else {
-        dayWorkingStartMinutes = timeToMinutes(salonHours.open);
-        dayWorkingEndMinutes = timeToMinutes(salonHours.close);
-      }
-    } else {
-      // Use salon working hours for this day
-      dayWorkingStartMinutes = timeToMinutes(salonHours.open);
-      dayWorkingEndMinutes = timeToMinutes(salonHours.close);
+      if (!staffMinutes) return 'closed';
+
+      dayWorkingStartMinutes = staffMinutes.start;
+      dayWorkingEndMinutes = staffMinutes.end;
     }
     
     const totalWorkingMinutes = dayWorkingEndMinutes - dayWorkingStartMinutes;
@@ -320,7 +342,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
     const endMinutes = dayWorkingEndMinutes;
     let freeSlotCount = 0;
 
-    const blockingBreaks = getActiveBreaksForDay(activeStaffId).map((breakItem) => ({
+    const blockingBreaks = getActiveBreaksForDay(activeStaffId, date).map((breakItem) => ({
       time: breakItem.start_time,
       end_time: breakItem.end_time,
     }));
@@ -573,6 +595,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   const timelineAxisWidth = 88;
   const timelineSlotMinutes = 30;
   const timelineSlotHeight = 72;
+  const timelineTopPadding = 18;
 
   const renderScheduleSlots = (staffId?: string) => {
     const slots = generateTimeSlots(staffId);
@@ -734,8 +757,9 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   };
 
   const getTimelineRange = () => {
-    let startMinutes = 24 * 60;
-    let endMinutes = 0;
+    const salonMinutes = getSalonWorkingMinutesForDate(selectedDate);
+    let startMinutes = salonMinutes?.start ?? 24 * 60;
+    let endMinutes = salonMinutes?.end ?? 0;
 
     staff.forEach((staffMember) => {
       const staffId = String(staffMember.id);
@@ -744,17 +768,23 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
       const workingEnd = Math.round(hours.end * 60);
 
       if (workingStart < workingEnd) {
-        startMinutes = Math.min(startMinutes, workingStart);
+        if (!salonMinutes) {
+          startMinutes = Math.min(startMinutes, workingStart);
+        }
         endMinutes = Math.max(endMinutes, workingEnd);
       }
 
       getDayAppointments(staffId).forEach((appointment) => {
-        startMinutes = Math.min(startMinutes, timeToMinutes(appointment.time));
+        if (!salonMinutes) {
+          startMinutes = Math.min(startMinutes, timeToMinutes(appointment.time));
+        }
         endMinutes = Math.max(endMinutes, timeToMinutes(appointment.end_time));
       });
 
       getActiveBreaksForDay(staffId).forEach((breakItem) => {
-        startMinutes = Math.min(startMinutes, timeToMinutes(breakItem.start_time));
+        if (!salonMinutes) {
+          startMinutes = Math.min(startMinutes, timeToMinutes(breakItem.start_time));
+        }
         endMinutes = Math.max(endMinutes, timeToMinutes(breakItem.end_time));
       });
     });
@@ -837,6 +867,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
     const gridTemplateColumns = `${timelineAxisWidth}px repeat(${staff.length}, minmax(${staffColumnMinWidth}px, 1fr))`;
     const minWidth = timelineAxisWidth + staff.length * staffColumnMinWidth;
     const timelineHeight = rows.length * timelineSlotHeight;
+    const timelineBodyHeight = timelineHeight + timelineTopPadding;
 
     return (
       <div className="overflow-x-auto">
@@ -863,7 +894,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
             })}
           </div>
 
-          <div className="relative" style={{ height: timelineHeight }}>
+          <div className="relative" style={{ height: timelineBodyHeight }}>
             {rows.map((minute, index) => {
               const isHour = minute % 60 === 0;
 
@@ -872,7 +903,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
                   key={`timeline-row-${minute}`}
                   className="absolute left-0 right-0 grid"
                   style={{
-                    top: index * timelineSlotHeight,
+                    top: timelineTopPadding + index * timelineSlotHeight,
                     height: timelineSlotHeight,
                     gridTemplateColumns
                   }}
@@ -905,8 +936,8 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
             })}
 
             <div
-              className="absolute inset-0 grid pointer-events-none"
-              style={{ gridTemplateColumns }}
+              className="absolute left-0 right-0 grid pointer-events-none"
+              style={{ top: timelineTopPadding, height: timelineHeight, gridTemplateColumns }}
             >
               <div className="sticky left-0 z-10 pointer-events-none" />
               {staff.map((staffMember) => {
