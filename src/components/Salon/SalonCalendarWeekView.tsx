@@ -31,7 +31,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
     today.setHours(0, 0, 0, 0);
     return today;
   });
-  const [selectedStaff, setSelectedStaff] = useState<string>('all');
+  const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
@@ -96,6 +96,9 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
       setAppointments(salonAppointments);
       setStaff(staffArray);
       setServices(servicesArray);
+      if (!selectedStaff && staffArray.length > 0) {
+        setSelectedStaff(String(staffArray[0].id));
+      }
 
       const [salonBreaksData, staffBreaksEntries] = await Promise.all([
         scheduleAPI.getSalonBreaks(user.salon.id).catch(() => ({ breaks: [] })),
@@ -193,7 +196,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
     return false;
   };
 
-  const getSelectedStaffId = () => selectedStaff || (staff[0]?.id ? String(staff[0].id) : 'all');
+  const getSelectedStaffId = () => selectedStaff || (staff[0]?.id ? String(staff[0].id) : '');
 
   const getActiveBreaksForSlot = (date: Date, hour: number, minute: number, staffId?: string) => {
     const slotStartMinutes = hour * 60 + minute;
@@ -464,7 +467,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
 
   const weekDays = getWeekDays();
   const timeSlots = generateTimeSlots();
-  const isAllStaffView = selectedStaff === 'all' && staff.length > 0;
+  const isAllStaffView = false;
   const dayColumnMinWidth = isAllStaffView ? Math.max(staff.length * 120, 160) : 96;
   const calendarGridTemplateColumns = `88px repeat(7, minmax(${dayColumnMinWidth}px, 1fr))`;
   const staffGridTemplateColumns = `repeat(${Math.max(staff.length, 1)}, minmax(120px, 1fr))`;
@@ -600,7 +603,6 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
               onChange={(e) => setSelectedStaff(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="all">Svi zaposleni</option>
               {staff.map(staffMember => (
                 <option key={staffMember.id} value={staffMember.id}>
                   {staffMember.name}
@@ -925,14 +927,14 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
 
             <div className="space-y-3">
               <div>
-                <div className="text-sm text-gray-500">Datum i vrijeme</div>
+                <div className="text-sm text-gray-500">Vrijeme</div>
                 <div className="font-medium">
                   {selectedAppointment.date} • {selectedAppointment.time} - {selectedAppointment.end_time}
                 </div>
               </div>
 
               <div>
-                <div className="text-sm text-gray-500">Klijent</div>
+                <div className="text-sm text-gray-500">Ime i prezime</div>
                 <div
                   onClick={() => {
                     setSelectedClient({
@@ -956,7 +958,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
               </div>
 
               <div>
-                <div className="text-sm text-gray-500">Usluga</div>
+                <div className="text-sm text-gray-500">Usluge</div>
                 <div className="font-medium">{getServiceName(selectedAppointment)}</div>
               </div>
 

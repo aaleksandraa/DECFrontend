@@ -203,9 +203,14 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
             end: Math.min(timeToMinutes(salonHours.close), timeToMinutes(dayHours.end)) / 60,
           };
         }
+
+        return { start: 9, end: 9 };
       }
 
-      return { start: 9, end: 9 };
+      return {
+        start: timeToMinutes(salonHours.open) / 60,
+        end: timeToMinutes(salonHours.close) / 60,
+      };
     }
     
     return {
@@ -292,8 +297,11 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
       if (dayHours?.is_working && dayHours.start && dayHours.end) {
         dayWorkingStartMinutes = Math.max(timeToMinutes(salonHours.open), timeToMinutes(dayHours.start));
         dayWorkingEndMinutes = Math.min(timeToMinutes(salonHours.close), timeToMinutes(dayHours.end));
-      } else {
+      } else if (dayHours) {
         return 'closed';
+      } else {
+        dayWorkingStartMinutes = timeToMinutes(salonHours.open);
+        dayWorkingEndMinutes = timeToMinutes(salonHours.close);
       }
     } else {
       // Use salon working hours for this day
@@ -349,14 +357,41 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   const generateTimeSlots = (staffId?: string) => {
     const staffWorkingHours = getWorkingHours(staffId);
     const dayAppointments = getDayAppointments(staffId);
+    const activeBreaks = getActiveBreaksForDay(staffId);
     const slots: Array<{ type: 'appointment' | 'free' | 'break' | 'cancelled'; data?: any; startTime: string; endTime: string; duration: number }> = [];
     
     let currentMinutes = staffWorkingHours.start * 60;
-    const endMinutes = staffWorkingHours.end * 60;
+    let endMinutes = staffWorkingHours.end * 60;
+
+    const visibleBlocks = [
+      ...dayAppointments.map((appointment) => ({
+        start: timeToMinutes(appointment.time),
+        end: timeToMinutes(appointment.end_time),
+      })),
+      ...activeBreaks.map((breakItem) => ({
+        start: timeToMinutes(breakItem.start_time),
+        end: timeToMinutes(breakItem.end_time),
+      })),
+    ].filter((block) => block.start < block.end);
+
+    if (visibleBlocks.length > 0) {
+      const firstVisibleBlock = Math.min(...visibleBlocks.map((block) => block.start));
+      const lastVisibleBlock = Math.max(...visibleBlocks.map((block) => block.end));
+
+      if (currentMinutes >= endMinutes) {
+        currentMinutes = firstVisibleBlock;
+        endMinutes = lastVisibleBlock;
+      } else {
+        currentMinutes = Math.min(currentMinutes, firstVisibleBlock);
+        endMinutes = Math.max(endMinutes, lastVisibleBlock);
+      }
+    }
 
     if (currentMinutes >= endMinutes) {
       return [];
     }
+
+    const visibleStartMinutes = currentMinutes;
 
     const blockingAppointments = dayAppointments
       .filter(isBlockingAppointment)
@@ -367,7 +402,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
         end: timeToMinutes(appointment.end_time),
       }));
 
-    const breakBlocks = getActiveBreaksForDay(staffId).map((breakItem) => ({
+    const breakBlocks = activeBreaks.map((breakItem) => ({
       type: 'break' as const,
       data: breakItem,
       start: timeToMinutes(breakItem.start_time),
@@ -425,16 +460,16 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
     }
 
     nonBlockingAppointments.forEach((appointment) => {
-      if (appointment.end <= staffWorkingHours.start * 60 || appointment.start >= endMinutes) {
+      if (appointment.end <= visibleStartMinutes || appointment.start >= endMinutes) {
         return;
       }
 
       slots.push({
         type: 'cancelled',
         data: appointment.data,
-        startTime: minutesToTime(Math.max(appointment.start, staffWorkingHours.start * 60)),
+        startTime: minutesToTime(Math.max(appointment.start, visibleStartMinutes)),
         endTime: minutesToTime(Math.min(appointment.end, endMinutes)),
-        duration: Math.min(appointment.end, endMinutes) - Math.max(appointment.start, staffWorkingHours.start * 60)
+        duration: Math.min(appointment.end, endMinutes) - Math.max(appointment.start, visibleStartMinutes)
       });
     });
 
@@ -534,198 +569,10 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   const dayNames = ['Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub', 'Ned'];
   const dayAppointments = getDayAppointments();
   const isAllStaffView = selectedStaff === 'all' && staff.length > 0;
-  const staffColumnMinWidth = 220;
+  const staffColumnMinWidth = 280;
+  const timelineAxisWidth = 88;
   const timelineSlotMinutes = 30;
-  const timelineSlotHeight = 64;
-
-  const getStaffWorkingMinutes = (staffId: string) => {
-    const hours = getWorkingHours(staffId);
-    return {
-      start: Math.round(hours.start * 60),
-      end: Math.round(hours.end * 60),
-    };
-  };
-
-  const getTimelineRows = () => {
-    const workingRanges = staff
-      .map((staffMember) => getStaffWorkingMinutes(String(staffMember.id)))
-      .filter((range) => range.start < range.end);
-
-    if (workingRanges.length === 0) return [];
-
-    const start = Math.min(...workingRanges.map((range) => range.start));
-    const end = Math.max(...workingRanges.map((range) => range.end));
-    const rows = [];
-
-    for (let minutes = start; minutes < end; minutes += timelineSlotMinutes) {
-      rows.push({
-        start: minutes,
-        end: Math.min(minutes + timelineSlotMinutes, end),
-      });
-    }
-
-    return rows;
-  };
-
-  const getTimelineBlocksForRow = (staffId: string, rowStart: number, rowEnd: number) => {
-    return generateTimeSlots(staffId).filter((slot) => {
-      if (slot.type === 'free') return false;
-      const slotStart = timeToMinutes(slot.startTime);
-      return slotStart >= rowStart && slotStart < rowEnd;
-    });
-  };
-
-  const renderTimelineBlock = (slot: any, staffId: string, rowStart: number) => {
-    const slotStart = timeToMinutes(slot.startTime);
-    const slotEnd = timeToMinutes(slot.endTime);
-    const top = ((slotStart - rowStart) / timelineSlotMinutes) * timelineSlotHeight;
-    const height = Math.max(((slotEnd - slotStart) / timelineSlotMinutes) * timelineSlotHeight - 8, 34);
-
-    if (slot.type === 'break') {
-      const breakItem = slot.data;
-
-      return (
-        <div
-          key={`timeline-break-${staffId}-${breakItem.id}-${slot.startTime}`}
-          className="absolute left-1.5 right-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-900 shadow-sm overflow-hidden z-20"
-          style={{ top: `${top + 4}px`, height: `${height}px` }}
-        >
-          <div className="text-[11px] font-semibold truncate">{breakItem.title || 'Pauza'}</div>
-          <div className="text-[10px] text-amber-700 truncate">
-            {slot.startTime} - {slot.endTime}
-          </div>
-        </div>
-      );
-    }
-
-    if (slot.type === 'cancelled') {
-      const appointment = slot.data;
-      const label = appointment.status === 'no_show' ? 'Nije došao' : 'Otkazan termin';
-
-      return (
-        <div
-          key={`timeline-cancelled-${staffId}-${appointment.id}`}
-          onClick={() => handleAppointmentClick(appointment)}
-          className="absolute left-1.5 right-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-red-900 shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all z-10"
-          style={{ top: `${top + 4}px`, height: `${height}px` }}
-        >
-          <div className="text-[11px] font-semibold truncate">{label}</div>
-          <div className="text-[10px] text-red-700 truncate">
-            {slot.startTime} - {slot.endTime} slobodno
-          </div>
-          <div className="text-[10px] truncate opacity-80">{appointment.client_name}</div>
-        </div>
-      );
-    }
-
-    const appointment = slot.data;
-
-    return (
-      <div
-        key={`timeline-appointment-${staffId}-${appointment.id}`}
-        onClick={() => handleAppointmentClick(appointment)}
-        className={`absolute left-1.5 right-1.5 rounded-md border-l-4 px-2 py-1.5 cursor-pointer hover:shadow-md transition-all overflow-hidden shadow-sm z-30 ${getStatusColor(appointment.status)}`}
-        style={{ top: `${top + 4}px`, height: `${height}px` }}
-      >
-        <div className="text-[11px] font-bold truncate">
-          {appointment.time} - {appointment.end_time}
-        </div>
-        <div className="text-[11px] font-semibold truncate">
-          {appointment.client_name}
-        </div>
-        <div className="text-[10px] truncate opacity-90">
-          {getServiceName(appointment)}
-        </div>
-        {appointment.notes && (
-          <div className="text-[10px] truncate opacity-75">
-            {appointment.notes}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderAllStaffTimeline = () => {
-    const rows = getTimelineRows();
-
-    if (rows.length === 0) {
-      return (
-        <div className="text-center py-12 text-gray-500">
-          <CalendarDays className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p>Nema radnog vremena za ovaj dan</p>
-        </div>
-      );
-    }
-
-    const gridTemplateColumns = `88px repeat(${staff.length}, minmax(${staffColumnMinWidth}px, 1fr))`;
-
-    return (
-      <div
-        className="min-w-[800px]"
-        style={{ minWidth: `${88 + staff.length * staffColumnMinWidth}px` }}
-      >
-        <div
-          className="grid border-b-2 border-gray-200 bg-gray-50"
-          style={{ gridTemplateColumns }}
-        >
-          <div className="px-3 py-3 text-sm font-bold text-gray-600 border-r border-gray-200 sticky left-0 bg-gray-50 z-20">
-            Vrijeme
-          </div>
-          {staff.map((staffMember) => {
-            const staffAppointments = getDayAppointments(String(staffMember.id));
-
-            return (
-              <div key={staffMember.id} className="px-3 py-3 text-center border-r border-gray-200 last:border-r-0">
-                <div className="text-sm font-bold text-gray-900 truncate">{staffMember.name}</div>
-                <div className="text-xs text-gray-500">
-                  {staffAppointments.length} {staffAppointments.length === 1 ? 'termin' : 'termina'}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="relative">
-          {rows.map((row) => (
-            <div
-              key={row.start}
-              className="grid bg-white"
-              style={{ gridTemplateColumns, minHeight: `${timelineSlotHeight}px` }}
-            >
-              <div className="relative border-r border-gray-200 sticky left-0 z-10 bg-white">
-                <span className={`absolute right-3 top-0 -translate-y-1/2 bg-white pr-1 tabular-nums ${
-                  row.start % 60 === 0
-                    ? 'text-[13px] font-semibold text-gray-600'
-                    : 'text-[11px] font-medium text-gray-400'
-                }`}>
-                  {minutesToTime(row.start)}
-                </span>
-              </div>
-
-              {staff.map((staffMember, staffIndex) => {
-                const staffId = String(staffMember.id);
-                const workingRange = getStaffWorkingMinutes(staffId);
-                const isWorking = row.start < workingRange.end && row.end > workingRange.start;
-                const blocks = getTimelineBlocksForRow(staffId, row.start, row.end);
-
-                return (
-                  <div
-                    key={`${staffId}-${row.start}`}
-                    className={`relative border-r border-gray-200 last:border-r-0 ${
-                      row.start % 60 === 0 ? 'border-t border-gray-200' : 'border-t border-dashed border-gray-100'
-                    } ${!isWorking ? 'bg-gray-100/80' : staffIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
-                    style={{ minHeight: `${timelineSlotHeight}px` }}
-                  >
-                    {blocks.map((slot) => renderTimelineBlock(slot, staffId, row.start))}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  const timelineSlotHeight = 72;
 
   const renderScheduleSlots = (staffId?: string) => {
     const slots = generateTimeSlots(staffId);
@@ -882,6 +729,200 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
             </div>
           );
         })}
+      </div>
+    );
+  };
+
+  const getTimelineRange = () => {
+    let startMinutes = 24 * 60;
+    let endMinutes = 0;
+
+    staff.forEach((staffMember) => {
+      const staffId = String(staffMember.id);
+      const hours = getWorkingHours(staffId);
+      const workingStart = Math.round(hours.start * 60);
+      const workingEnd = Math.round(hours.end * 60);
+
+      if (workingStart < workingEnd) {
+        startMinutes = Math.min(startMinutes, workingStart);
+        endMinutes = Math.max(endMinutes, workingEnd);
+      }
+
+      getDayAppointments(staffId).forEach((appointment) => {
+        startMinutes = Math.min(startMinutes, timeToMinutes(appointment.time));
+        endMinutes = Math.max(endMinutes, timeToMinutes(appointment.end_time));
+      });
+
+      getActiveBreaksForDay(staffId).forEach((breakItem) => {
+        startMinutes = Math.min(startMinutes, timeToMinutes(breakItem.start_time));
+        endMinutes = Math.max(endMinutes, timeToMinutes(breakItem.end_time));
+      });
+    });
+
+    if (startMinutes >= endMinutes) {
+      return null;
+    }
+
+    return {
+      start: Math.floor(startMinutes / timelineSlotMinutes) * timelineSlotMinutes,
+      end: Math.ceil(endMinutes / timelineSlotMinutes) * timelineSlotMinutes,
+    };
+  };
+
+  const renderTimelineBlock = (
+    slot: { type: 'appointment' | 'free' | 'break' | 'cancelled'; data?: any; startTime: string; endTime: string; duration: number },
+    staffId: string,
+    timelineStart: number
+  ) => {
+    if (slot.type === 'free') return null;
+
+    const start = timeToMinutes(slot.startTime);
+    const top = ((start - timelineStart) / timelineSlotMinutes) * timelineSlotHeight;
+    const height = Math.max((slot.duration / timelineSlotMinutes) * timelineSlotHeight - 6, 38);
+
+    if (slot.type === 'break') {
+      const breakItem = slot.data;
+
+      return (
+        <div
+          key={`timeline-break-${staffId}-${breakItem.id}-${slot.startTime}`}
+          className="absolute left-2 right-2 z-10 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-900 shadow-sm overflow-hidden"
+          style={{ top, height }}
+        >
+          <div className="text-xs font-semibold truncate">{breakItem.title || 'Pauza'}</div>
+          <div className="text-[11px] opacity-80 truncate">{slot.startTime} - {slot.endTime}</div>
+        </div>
+      );
+    }
+
+    const appointment = slot.data;
+    const isCancelled = slot.type === 'cancelled';
+
+    return (
+      <button
+        key={`timeline-${slot.type}-${staffId}-${appointment.id}-${slot.startTime}`}
+        type="button"
+        onClick={() => handleAppointmentClick(appointment)}
+        className={`absolute left-2 right-2 z-20 pointer-events-auto rounded-md border-l-4 px-2 py-1.5 text-left shadow-sm transition-all hover:shadow-md overflow-hidden ${
+          isCancelled
+            ? 'border-red-300 bg-red-50 text-red-900'
+            : getStatusColor(appointment.status)
+        }`}
+        style={{ top, height }}
+      >
+        <div className="text-xs font-bold truncate">{formatTimeRange(appointment.time, appointment.end_time)}</div>
+        <div className="text-xs font-semibold truncate">{appointment.client_name}</div>
+        <div className="text-[11px] opacity-90 truncate">{isCancelled ? 'Otkazan termin - slot slobodan' : getServiceName(appointment)}</div>
+      </button>
+    );
+  };
+
+  const renderAllStaffTimeline = () => {
+    const range = getTimelineRange();
+
+    if (!range) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <CalendarDays className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p>Nema radnog vremena za ovaj dan</p>
+        </div>
+      );
+    }
+
+    const rows = [];
+    for (let minute = range.start; minute < range.end; minute += timelineSlotMinutes) {
+      rows.push(minute);
+    }
+
+    const gridTemplateColumns = `${timelineAxisWidth}px repeat(${staff.length}, minmax(${staffColumnMinWidth}px, 1fr))`;
+    const minWidth = timelineAxisWidth + staff.length * staffColumnMinWidth;
+    const timelineHeight = rows.length * timelineSlotHeight;
+
+    return (
+      <div className="overflow-x-auto">
+        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden" style={{ minWidth }}>
+          <div
+            className="grid border-b border-gray-200 bg-gray-50"
+            style={{ gridTemplateColumns }}
+          >
+            <div className="sticky left-0 z-20 bg-gray-50 px-3 py-3 text-xs font-semibold text-gray-500 border-r border-gray-200">
+              Vrijeme
+            </div>
+            {staff.map((staffMember) => {
+              const staffId = String(staffMember.id);
+              const count = getDayAppointments(staffId).length;
+
+              return (
+                <div key={staffId} className="px-3 py-3 border-r border-gray-200 last:border-r-0">
+                  <div className="font-semibold text-gray-900 truncate">{staffMember.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {count} {count === 1 ? 'termin' : 'termina'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="relative" style={{ height: timelineHeight }}>
+            {rows.map((minute, index) => {
+              const isHour = minute % 60 === 0;
+
+              return (
+                <div
+                  key={`timeline-row-${minute}`}
+                  className="absolute left-0 right-0 grid"
+                  style={{
+                    top: index * timelineSlotHeight,
+                    height: timelineSlotHeight,
+                    gridTemplateColumns
+                  }}
+                >
+                  <div className="sticky left-0 z-10 bg-white border-r border-gray-200">
+                    <span className={`absolute right-3 top-0 -translate-y-1/2 bg-white pr-1 tabular-nums ${
+                      isHour ? 'text-[13px] font-semibold text-gray-600' : 'text-[11px] font-medium text-gray-400'
+                    }`}>
+                      {minutesToTime(minute)}
+                    </span>
+                  </div>
+                  {staff.map((staffMember) => {
+                    const staffId = String(staffMember.id);
+                    const hours = getWorkingHours(staffId);
+                    const workingStart = Math.round(hours.start * 60);
+                    const workingEnd = Math.round(hours.end * 60);
+                    const isWorking = minute >= workingStart && minute < workingEnd;
+
+                    return (
+                      <div
+                        key={`timeline-cell-${staffId}-${minute}`}
+                        className={`border-r border-gray-200 last:border-r-0 ${
+                          isHour ? 'border-t border-gray-200' : 'border-t border-dashed border-gray-100'
+                        } ${isWorking ? 'bg-white' : 'bg-gray-100/70'}`}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+            <div
+              className="absolute inset-0 grid pointer-events-none"
+              style={{ gridTemplateColumns }}
+            >
+              <div className="sticky left-0 z-10 pointer-events-none" />
+              {staff.map((staffMember) => {
+                const staffId = String(staffMember.id);
+
+                return (
+                  <div key={`timeline-overlay-${staffId}`} className="relative pointer-events-none">
+                    {generateTimeSlots(staffId)
+                      .filter((slot) => slot.type !== 'free')
+                      .map((slot) => renderTimelineBlock(slot, staffId, range.start))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
