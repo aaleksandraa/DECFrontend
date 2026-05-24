@@ -68,6 +68,7 @@ interface ClientDetails {
 }
 
 type LastVisitFilter = 'all' | 'week' | 'month' | '3months' | '6months' | 'year';
+type AppointmentFilter = 'all' | 'upcoming';
 const CLIENTS_PER_PAGE = 25;
 
 export function SalonClients() {
@@ -94,6 +95,7 @@ export function SalonClients() {
   const [selectedStaffId, setSelectedStaffId] = useState<string>('all');
   const [selectedServiceId, setSelectedServiceId] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [appointmentFilter, setAppointmentFilter] = useState<AppointmentFilter>('all');
 
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -133,10 +135,11 @@ export function SalonClients() {
   const getClientFilterParams = useCallback(() => ({
     search,
     last_visit_filter: lastVisitFilter,
+    appointment_filter: appointmentFilter,
     staff_ids: selectedStaffId === 'all' ? [] : [Number(selectedStaffId)],
     service_ids: selectedServiceId === 'all' ? [] : [Number(selectedServiceId)],
     service_categories: selectedCategory === 'all' ? [] : [selectedCategory],
-  }), [lastVisitFilter, search, selectedCategory, selectedServiceId, selectedStaffId]);
+  }), [appointmentFilter, lastVisitFilter, search, selectedCategory, selectedServiceId, selectedStaffId]);
 
   const fetchClients = useCallback(async (pageToLoad = 1, append = false) => {
     try {
@@ -295,6 +298,7 @@ export function SalonClients() {
     setSelectedStaffId('all');
     setSelectedServiceId('all');
     setSelectedCategory('all');
+    setAppointmentFilter('all');
     setLastVisitFilter('all');
   };
 
@@ -303,11 +307,13 @@ export function SalonClients() {
     selectedStaffId !== 'all' ||
     selectedServiceId !== 'all' ||
     selectedCategory !== 'all' ||
+    appointmentFilter !== 'all' ||
     lastVisitFilter !== 'all';
   const activeFilterCount = [
     selectedStaffId !== 'all',
     selectedServiceId !== 'all',
     selectedCategory !== 'all',
+    appointmentFilter !== 'all',
     lastVisitFilter !== 'all',
   ].filter(Boolean).length;
 
@@ -398,7 +404,7 @@ export function SalonClients() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Zaposleni</label>
               <select
@@ -428,6 +434,18 @@ export function SalonClients() {
                     {service.name}{service.category ? ` (${service.category})` : ''}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Termini</label>
+              <select
+                value={appointmentFilter}
+                onChange={(e) => setAppointmentFilter(e.target.value as AppointmentFilter)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+              >
+                <option value="all">Svi klijenti</option>
+                <option value="upcoming">Samo sa zakazanim terminom</option>
               </select>
             </div>
 
