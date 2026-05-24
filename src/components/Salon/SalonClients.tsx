@@ -3,6 +3,7 @@ import {
   CalendarDaysIcon,
   CurrencyDollarIcon,
   EnvelopeIcon,
+  ArrowDownTrayIcon,
   MagnifyingGlassIcon,
   PaperAirplaneIcon,
   PhoneIcon,
@@ -67,6 +68,7 @@ interface ClientDetails {
 }
 
 type LastVisitFilter = 'all' | 'week' | 'month' | '3months' | '6months' | 'year';
+const CLIENTS_PER_PAGE = 25;
 
 export function SalonClients() {
   const {
@@ -82,6 +84,10 @@ export function SalonClients() {
   const [clients, setClients] = useState<Client[]>([]);
   const [totalClients, setTotalClients] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [exportingClients, setExportingClients] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
   const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
@@ -124,23 +130,40 @@ export function SalonClients() {
 
   useAutoSave(handleAutoSave, { emailSubject, emailMessage, selectedClients }, 800);
 
-  const fetchClients = useCallback(async () => {
+  const getClientFilterParams = useCallback(() => ({
+    search,
+    last_visit_filter: lastVisitFilter,
+    staff_ids: selectedStaffId === 'all' ? [] : [Number(selectedStaffId)],
+    service_ids: selectedServiceId === 'all' ? [] : [Number(selectedServiceId)],
+    service_categories: selectedCategory === 'all' ? [] : [selectedCategory],
+  }), [lastVisitFilter, search, selectedCategory, selectedServiceId, selectedStaffId]);
+
+  const fetchClients = useCallback(async (pageToLoad = 1, append = false) => {
     try {
-      setLoading(true);
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
       const response = await api.get('/clients', {
         params: {
-          search,
-          per_page: 500,
-          last_visit_filter: lastVisitFilter,
-          staff_ids: selectedStaffId === 'all' ? [] : [Number(selectedStaffId)],
-          service_ids: selectedServiceId === 'all' ? [] : [Number(selectedServiceId)],
-          service_categories: selectedCategory === 'all' ? [] : [selectedCategory],
+          ...getClientFilterParams(),
+          page: pageToLoad,
+          per_page: CLIENTS_PER_PAGE,
         },
       });
 
       const data = response.data || {};
-      setClients(data.clients || []);
+      const nextClients = data.clients || [];
+      setClients((prev) => {
+        if (!append) return nextClients;
+        const existingIds = new Set(prev.map((client) => client.id));
+        return [...prev, ...nextClients.filter((client: Client) => !existingIds.has(client.id))];
+      });
       setTotalClients(data.total || 0);
+      setCurrentPage(data.current_page || pageToLoad);
+      setLastPage(data.last_page || 1);
       setStaffOptions(data.filters?.staff || []);
       setServiceOptions(data.filters?.services || []);
       setCategoryOptions(data.filters?.categories || []);
@@ -155,13 +178,52 @@ export function SalonClients() {
         setToast({ message: 'Greska pri ucitavanju klijenata.', type: 'error' });
       }
     } finally {
-      setLoading(false);
+      if (append) {
+        setLoadingMore(false);
+      } else {
+        setLoading(false);
+      }
     }
-  }, [lastVisitFilter, search, selectedCategory, selectedServiceId, selectedStaffId]);
+  }, [getClientFilterParams]);
 
   useEffect(() => {
-    void fetchClients();
+    void fetchClients(1, false);
   }, [fetchClients]);
+
+  const loadMoreClients = () => {
+    if (loadingMore || currentPage >= lastPage) return;
+    void fetchClients(currentPage + 1, true);
+  };
+
+  const exportClients = async () => {
+    try {
+      setExportingClients(true);
+      const response = await api.get('/clients/export', {
+        params: getClientFilterParams(),
+        responseType: 'blob',
+      });
+
+      const disposition = response.headers?.['content-disposition'] || '';
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+      const filename = filenameMatch?.[1] || `klijenti-${new Date().toISOString().slice(0, 10)}.csv`;
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      setToast({ message: 'Export klijenata je uspješno pripremljen.', type: 'success' });
+    } catch (error) {
+      console.error('Error exporting clients:', error);
+      setToast({ message: 'Greška pri exportu klijenata.', type: 'error' });
+    } finally {
+      setExportingClients(false);
+    }
+  };
 
   const fetchClientDetails = async (clientId: number) => {
     try {
@@ -266,15 +328,25 @@ export function SalonClients() {
             <h2 className="text-2xl font-bold text-gray-900">Klijenti</h2>
             <p className="text-gray-600 mt-1">Filtrirajte klijente i saljite personalizovane email poruke.</p>
           </div>
-          {selectedClients.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-2">
             <button
-              onClick={() => setShowEmailModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+              onClick={exportClients}
+              disabled={exportingClients || totalClients === 0}
+              className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <EnvelopeIcon className="h-5 w-5" />
-              Posalji email ({selectedClients.length})
+              <ArrowDownTrayIcon className="h-5 w-5" />
+              {exportingClients ? 'Export...' : 'Export klijenata'}
             </button>
+            {selectedClients.length > 0 && (
+              <button
+                onClick={() => setShowEmailModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                <EnvelopeIcon className="h-5 w-5" />
+                Posalji email ({selectedClients.length})
+              </button>
             )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -503,6 +575,17 @@ export function SalonClients() {
                 </tbody>
               </table>
             </div>
+            {currentPage < lastPage && (
+              <div className="flex justify-center border-t border-gray-200 p-4">
+                <button
+                  onClick={loadMoreClients}
+                  disabled={loadingMore}
+                  className="px-5 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  {loadingMore ? 'Ucitavanje...' : `Ucitaj jos (${clients.length}/${totalClients})`}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
