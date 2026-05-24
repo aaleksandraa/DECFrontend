@@ -458,6 +458,11 @@ export const appointmentAPI = {
   getMonthCapacity: async (month: string) => {
     const response = await api.get('/appointments/capacity/month', { params: { month } });
     return response.data;
+  },
+
+  getCalendarVersion: async (params: { start_date: string; end_date: string; staff_id?: string }) => {
+    const response = await api.get('/appointments/calendar-version', { params });
+    return response.data;
   }
 };
 

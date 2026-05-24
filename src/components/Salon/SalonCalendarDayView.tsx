@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight,
@@ -18,6 +18,9 @@ interface SalonCalendarDayViewProps {
   onViewChange?: (view: 'month' | 'week' | 'day') => void;
 }
 
+const CALENDAR_VERSION_POLL_INTERVAL_MS = 60000;
+const CALENDAR_VERSION_POLL_JITTER_MS = 5000;
+
 export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps) {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -36,31 +39,138 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [capacityData, setCapacityData] = useState<Map<string, any>>(new Map());
+  const [calendarVersion, setCalendarVersion] = useState<string | null>(null);
+  const [calendarRefreshNotice, setCalendarRefreshNotice] = useState<{
+    type: 'updated' | 'stale';
+    message: string;
+  } | null>(null);
+  const calendarVersionRef = useRef<string | null>(null);
+  const lastVersionCheckRef = useRef(0);
+  const modalOpenRef = useRef(false);
+
+  useEffect(() => {
+    calendarVersionRef.current = calendarVersion;
+  }, [calendarVersion]);
+
+  useEffect(() => {
+    modalOpenRef.current = showAppointmentModal || showClientModal || showAddModal;
+  }, [showAppointmentModal, showClientModal, showAddModal]);
 
   // Load data when component mounts or selected month changes
   useEffect(() => {
     loadData();
     loadCapacityData();
-  }, [user, selectedMonth]);
+  }, [user, selectedMonth, selectedStaff]);
 
-  const loadData = async () => {
+  useEffect(() => {
+    if (!user?.salon || !calendarVersionRef.current) return;
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleNextCheck = () => {
+      if (cancelled) return;
+      const jitter = Math.floor(Math.random() * CALENDAR_VERSION_POLL_JITTER_MS);
+      timeoutId = setTimeout(checkCalendarVersion, CALENDAR_VERSION_POLL_INTERVAL_MS + jitter);
+    };
+
+    const checkCalendarVersion = async () => {
+      if (cancelled) return;
+
+      if (document.visibilityState !== 'visible') {
+        scheduleNextCheck();
+        return;
+      }
+
+      try {
+        const versionData = await fetchCalendarVersion();
+        lastVersionCheckRef.current = Date.now();
+
+        if (versionData?.enabled === false) {
+          setCalendarVersion(null);
+          calendarVersionRef.current = null;
+          setCalendarRefreshNotice(null);
+          return;
+        }
+
+        if (!versionData?.version || versionData.version === calendarVersionRef.current) {
+          return;
+        }
+
+        if (modalOpenRef.current) {
+          setCalendarRefreshNotice({
+            type: 'stale',
+            message: 'Ima novih termina. Osvježite kalendar.'
+          });
+          return;
+        }
+
+        await loadData({ silent: true });
+        if (!calendarVersionRef.current) {
+          return;
+        }
+
+        setCalendarRefreshNotice({
+          type: 'updated',
+          message: 'Kalendar je ažuriran. Prikazani su najnoviji termini.'
+        });
+      } catch (error) {
+        console.warn('Calendar version check failed:', error);
+      } finally {
+        scheduleNextCheck();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        Date.now() - lastVersionCheckRef.current > CALENDAR_VERSION_POLL_INTERVAL_MS
+      ) {
+        if (timeoutId) clearTimeout(timeoutId);
+        checkCalendarVersion();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    scheduleNextCheck();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user?.salon?.id, selectedMonth, selectedStaff, calendarVersion]);
+
+  const getCalendarRange = () => {
+    const year = selectedMonth.getFullYear();
+    const month = selectedMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    return {
+      startDate: `${String(firstDay.getDate()).padStart(2, '0')}.${String(firstDay.getMonth() + 1).padStart(2, '0')}.${firstDay.getFullYear()}`,
+      endDate: `${String(lastDay.getDate()).padStart(2, '0')}.${String(lastDay.getMonth() + 1).padStart(2, '0')}.${lastDay.getFullYear()}`
+    };
+  };
+
+  const getCalendarVersionParams = () => ({
+    ...getCalendarRange(),
+    ...(selectedStaff !== 'all' ? { staff_id: selectedStaff } : {})
+  });
+
+  const fetchCalendarVersion = () => appointmentAPI.getCalendarVersion(getCalendarVersionParams());
+
+  const loadData = async (options: { silent?: boolean } = {}) => {
     if (!user?.salon) return;
 
     try {
-      setLoading(true);
+      if (!options.silent) setLoading(true);
       
       // Calculate date range for current month view (for mini calendar)
-      const year = selectedMonth.getFullYear();
-      const month = selectedMonth.getMonth();
-      const firstDay = new Date(year, month, 1);
-      const lastDay = new Date(year, month + 1, 0);
-      
-      // Format dates for API (DD.MM.YYYY)
-      const startDate = `${String(firstDay.getDate()).padStart(2, '0')}.${String(firstDay.getMonth() + 1).padStart(2, '0')}.${firstDay.getFullYear()}`;
-      const endDate = `${String(lastDay.getDate()).padStart(2, '0')}.${String(lastDay.getMonth() + 1).padStart(2, '0')}.${lastDay.getFullYear()}`;
+      const { startDate, endDate } = getCalendarRange();
       
       // Load appointments, staff, and services
-      const [appointmentsData, staffData, servicesData, salonData] = await Promise.all([
+      const [appointmentsData, staffData, servicesData, salonData, versionData] = await Promise.all([
         appointmentAPI.getAppointments({ 
           per_page: 1000,
           start_date: startDate,
@@ -68,7 +178,8 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
         }),
         staffAPI.getStaff(user.salon.id),
         serviceAPI.getServices(user.salon.id),
-        salonAPI.getSalon(user.salon.id).catch(() => user.salon)
+        salonAPI.getSalon(user.salon.id).catch(() => user.salon),
+        fetchCalendarVersion().catch(() => null)
       ]);
       
       const appointmentsArray = Array.isArray(appointmentsData) ? appointmentsData : (appointmentsData?.data || []);
@@ -81,6 +192,17 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
       setStaff(staffArray);
       setServices(servicesArray);
       setSalonDetails(salonData);
+
+      if (versionData?.enabled === false) {
+        setCalendarVersion(null);
+        calendarVersionRef.current = null;
+        setCalendarRefreshNotice(null);
+        lastVersionCheckRef.current = Date.now();
+      } else if (versionData?.version) {
+        setCalendarVersion(versionData.version);
+        calendarVersionRef.current = versionData.version;
+        lastVersionCheckRef.current = Date.now();
+      }
 
       const [salonBreaksData, staffBreaksEntries] = await Promise.all([
         scheduleAPI.getSalonBreaks(user.salon.id).catch(() => ({ breaks: [] })),
@@ -97,8 +219,21 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
+  };
+
+  const refreshCalendarFromNotice = async () => {
+    await loadData({ silent: true });
+    if (!calendarVersionRef.current) {
+      setCalendarRefreshNotice(null);
+      return;
+    }
+
+    setCalendarRefreshNotice({
+      type: 'updated',
+      message: 'Kalendar je ažuriran. Prikazani su najnoviji termini.'
+    });
   };
 
   const loadCapacityData = async () => {
@@ -975,6 +1110,39 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
 
   return (
     <div className="space-y-4 max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+      {calendarRefreshNotice && (
+        <div className={`fixed right-4 top-4 z-[60] max-w-md rounded-lg border px-4 py-3 shadow-lg ${
+          calendarRefreshNotice.type === 'stale'
+            ? 'border-amber-200 bg-amber-50 text-amber-900'
+            : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold">
+                {calendarRefreshNotice.type === 'stale' ? 'Novi termini' : 'Kalendar ažuriran'}
+              </div>
+              <div className="text-sm">{calendarRefreshNotice.message}</div>
+            </div>
+            {calendarRefreshNotice.type === 'stale' ? (
+              <button
+                onClick={refreshCalendarFromNotice}
+                className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+              >
+                Osvježi
+              </button>
+            ) : (
+              <button
+                onClick={() => setCalendarRefreshNotice(null)}
+                className="rounded-md px-2 py-1 text-xs font-semibold hover:bg-emerald-100"
+                aria-label="Zatvori obavijest"
+              >
+                x
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold text-gray-900">Dostupnost</h1>

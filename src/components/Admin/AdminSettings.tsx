@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, User, Lock, Bell, Shield, Eye, EyeOff, BarChart3, Globe, CheckCircle, XCircle, Palette, Image, UserPlus } from 'lucide-react';
+import { Save, User, Lock, Bell, Shield, Eye, EyeOff, BarChart3, Globe, CheckCircle, XCircle, Palette, Image, UserPlus, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { authAPI, adminAPI, adminSettingsAPI, publicSettingsAPI } from '../../services/api';
 
@@ -95,6 +95,10 @@ export function AdminSettings() {
   // Search version setting
   const [searchVersion, setSearchVersion] = useState<'v1' | 'v2'>('v1');
   const [searchVersionLoading, setSearchVersionLoading] = useState(true);
+
+  // Performance settings
+  const [calendarRealtimeRefreshEnabled, setCalendarRealtimeRefreshEnabled] = useState(true);
+  const [performanceLoading, setPerformanceLoading] = useState(false);
   
   // Load analytics settings on mount
   useEffect(() => {
@@ -205,6 +209,25 @@ export function AdminSettings() {
       }
     };
     loadRegistrationSettings();
+  }, []);
+
+  // Load performance settings
+  useEffect(() => {
+    const loadPerformanceSettings = async () => {
+      try {
+        const response = await adminAPI.getSettings('performance');
+        const settings = response.data || {};
+        const calendarRefreshSetting = settings.calendar_realtime_refresh_enabled;
+
+        if (calendarRefreshSetting?.value !== undefined) {
+          setCalendarRealtimeRefreshEnabled(Boolean(calendarRefreshSetting.value));
+        }
+      } catch (error) {
+        console.error('Failed to load performance settings:', error);
+      }
+    };
+
+    loadPerformanceSettings();
   }, []);
 
   // Search salons for featured salon dropdown
@@ -407,6 +430,7 @@ export function AdminSettings() {
     { id: 'security', label: 'Sigurnost', icon: Lock },
     { id: 'appearance', label: 'Izgled', icon: Palette },
     { id: 'registration', label: 'Registracija', icon: UserPlus },
+    { id: 'performance', label: 'Sistem', icon: RefreshCw },
     { id: 'notifications', label: 'Obavještenja', icon: Bell },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   ];
@@ -424,6 +448,25 @@ export function AdminSettings() {
       setMessage({ type: 'error', text: 'Greška prilikom čuvanja postavki registracije.' });
     } finally {
       setRegistrationLoading(false);
+    }
+  };
+
+  const handlePerformanceSubmit = async () => {
+    setPerformanceLoading(true);
+    setMessage(null);
+
+    try {
+      await adminAPI.updateSettings([
+        {
+          key: 'calendar_realtime_refresh_enabled',
+          value: calendarRealtimeRefreshEnabled,
+        },
+      ]);
+      setMessage({ type: 'success', text: 'Sistemske postavke su uspješno sačuvane!' });
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Greška prilikom čuvanja sistemskih postavki.' });
+    } finally {
+      setPerformanceLoading(false);
     }
   };
 
@@ -644,6 +687,56 @@ export function AdminSettings() {
                 >
                   <Save className="w-4 h-4" />
                   {registrationLoading ? 'Čuvanje...' : 'Sačuvaj promjene'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'performance' && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-r from-slate-700 to-blue-700 rounded-xl flex items-center justify-center">
+                  <RefreshCw className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Sistemske postavke</h3>
+                  <p className="text-sm text-gray-600">Kontrole koje pomažu kada treba smanjiti opterećenje servera</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="flex items-center justify-between gap-6 p-4 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+                  <div>
+                    <span className="font-medium text-gray-900 block">Automatsko osvježavanje kalendara</span>
+                    <span className="text-sm text-gray-600">
+                      Kada je uključeno, DAN i SEDMICA prikaz svakih 60 sekundi rade laganu provjeru verzije termina.
+                      Ako server bude pod pritiskom, isključite ovu opciju i kalendar neće raditi periodične provjere.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={calendarRealtimeRefreshEnabled}
+                    onChange={(e) => setCalendarRealtimeRefreshEnabled(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                  />
+                </label>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <h4 className="font-medium text-amber-900 mb-2">Napomena</h4>
+                <p className="text-sm text-amber-800">
+                  Isključivanje ne utiče na ručno osvježavanje stranice niti na zakazivanje termina. Samo zaustavlja automatsku provjeru novih termina u otvorenom kalendaru.
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={handlePerformanceSubmit}
+                  disabled={performanceLoading}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {performanceLoading ? 'Čuvanje...' : 'Sačuvaj promjene'}
                 </button>
               </div>
             </div>
