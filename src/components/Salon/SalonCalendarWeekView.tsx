@@ -29,7 +29,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return today;
+    return getMonday(today);
   });
   const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
@@ -307,6 +307,15 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
           return timeInMinutes >= startMinutes && timeInMinutes < endMinutes;
         }
       }
+      const salonHours = user?.salon?.working_hours?.[dayKey];
+      if (salonHours?.is_open && salonHours.open && salonHours.close) {
+        const [startH, startM] = salonHours.open.split(':').map(Number);
+        const [endH, endM] = salonHours.close.split(':').map(Number);
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+        return timeInMinutes >= startMinutes && timeInMinutes < endMinutes;
+      }
+
       return false;
     }
     
@@ -325,14 +334,37 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
     return false;
   };
 
+  const isDayWorking = (day: Date, staffId?: string): boolean => {
+    const dayOfWeek = day.getDay();
+    const dayKey = dayNames[dayOfWeek];
+    const activeStaffId = staffId || getSelectedStaffId();
+
+    if (activeStaffId) {
+      const staffMember = staff.find(s => String(s.id) === String(activeStaffId));
+      const staffDayHours = staffMember?.working_hours?.[dayKey];
+
+      if (staffDayHours) {
+        return Boolean(staffDayHours.is_working && staffDayHours.start && staffDayHours.end);
+      }
+    }
+
+    const salonHours = user?.salon?.working_hours?.[dayKey];
+
+    if (salonHours) {
+      return Boolean(salonHours.is_open && salonHours.open && salonHours.close);
+    }
+
+    return true;
+  };
+
   const workingHours = getWorkingHours();
   const workingHoursStart = workingHours.start;
   const workingHoursEnd = workingHours.end;
 
-  // Get 7 days starting from today (not Monday)
+  // Get 7 days starting from Monday
   const getWeekDays = () => {
     const days = [];
-    const startDate = new Date(currentWeekStart);
+    const startDate = getMonday(currentWeekStart);
     
     for (let i = 0; i < 7; i++) {
       const date = new Date(startDate);
@@ -356,14 +388,14 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
   const navigateWeek = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentWeekStart);
     newDate.setDate(currentWeekStart.getDate() + (direction === 'prev' ? -7 : 7));
-    setCurrentWeekStart(newDate);
+    setCurrentWeekStart(getMonday(newDate));
   };
 
-  // Go to current week (starting from today)
+  // Go to current week (starting from Monday)
   const goToToday = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    setCurrentWeekStart(today);
+    setCurrentWeekStart(getMonday(today));
   };
 
   // Get appointments for a specific date and 30-minute slot
@@ -468,8 +500,17 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
   const weekDays = getWeekDays();
   const timeSlots = generateTimeSlots();
   const isAllStaffView = false;
-  const dayColumnMinWidth = isAllStaffView ? Math.max(staff.length * 120, 160) : 96;
-  const calendarGridTemplateColumns = `88px repeat(7, minmax(${dayColumnMinWidth}px, 1fr))`;
+  const workingDayMinWidth = isAllStaffView ? Math.max(staff.length * 120, 160) : 112;
+  const closedDayMinWidth = 56;
+  const dayColumnWidths = weekDays.map((day) => (
+    isDayWorking(day)
+      ? `minmax(${workingDayMinWidth}px, 1fr)`
+      : `minmax(${closedDayMinWidth}px, 0.35fr)`
+  ));
+  const calendarGridTemplateColumns = `88px ${dayColumnWidths.join(' ')}`;
+  const calendarMinWidth = 88 + weekDays.reduce((total, day) => (
+    total + (isDayWorking(day) ? workingDayMinWidth : closedDayMinWidth)
+  ), 0);
   const staffGridTemplateColumns = `repeat(${Math.max(staff.length, 1)}, minmax(120px, 1fr))`;
 
   const renderSlotContent = (
@@ -658,7 +699,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                     onClick={() => {
                       const newDate = new Date(currentWeekStart);
                       newDate.setMonth(index);
-                      setCurrentWeekStart(newDate);
+                      setCurrentWeekStart(getMonday(newDate));
                       setShowMonthPicker(false);
                     }}
                     className={`px-3 py-2 text-sm rounded hover:bg-blue-50 transition-colors ${
@@ -693,7 +734,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                     onClick={() => {
                       const newDate = new Date(currentWeekStart);
                       newDate.setFullYear(year);
-                      setCurrentWeekStart(newDate);
+                      setCurrentWeekStart(getMonday(newDate));
                       setShowYearPicker(false);
                     }}
                     className={`px-3 py-2 text-sm rounded hover:bg-blue-50 transition-colors ${
@@ -717,8 +758,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="overflow-x-auto">
           <div
-            className="min-w-[800px]"
-            style={isAllStaffView ? { minWidth: `${88 + 7 * dayColumnMinWidth}px` } : undefined}
+            style={{ minWidth: `${calendarMinWidth}px` }}
           >
             {/* Header with days */}
             <div
@@ -734,18 +774,19 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                 const capacity = capacityData.get(isoDateStr);
                 const dayOfWeek = day.getDay();
                 const dayNamesForHeader = ['Ned', 'Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub'];
+                const dayIsWorking = isDayWorking(day);
                 
                 return (
                   <div
                     key={index}
-                    className={`p-4 text-center border-r border-gray-200 last:border-r-0 ${
+                    className={`${dayIsWorking ? 'p-4' : 'px-2 py-4'} text-center border-r border-gray-200 last:border-r-0 ${
                       isToday ? 'bg-blue-50' : ''
-                    }`}
+                    } ${!dayIsWorking ? 'bg-gray-100/80' : ''}`}
                   >
-                    <div className={`text-sm font-bold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-800'}`}>
+                    <div className={`${dayIsWorking ? 'text-sm' : 'text-[11px]'} font-bold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-800'}`}>
                       {dayNamesForHeader[dayOfWeek]}
                     </div>
-                    <div className={`text-lg font-bold ${isToday ? 'text-blue-600' : 'text-gray-700'}`}>
+                    <div className={`${dayIsWorking ? 'text-lg' : 'text-sm'} font-bold ${isToday ? 'text-blue-600' : 'text-gray-700'}`}>
                       {day.getDate()}.{day.getMonth() + 1}.
                     </div>
                     {/* Capacity badge */}
