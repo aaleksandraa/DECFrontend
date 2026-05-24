@@ -13,7 +13,6 @@ import {
   Plus,
   MessageSquare,
   Scissors,
-  LayoutGrid,
   Columns,
   CalendarDays,
   ChevronDown
@@ -40,7 +39,7 @@ export function FrizerCalendar() {
   const [highlightedAppointment, setHighlightedAppointment] = useState<number | null>(null);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [showClientModal, setShowClientModal] = useState(false);
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
+  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('week');
   const [capacityData, setCapacityData] = useState<Map<string, any>>(new Map());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
@@ -379,17 +378,6 @@ export function FrizerCalendar() {
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* View Mode Toggle */}
           <div className="flex items-center bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('month')}
-              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'month'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-              <span className="hidden sm:inline">Mjesec</span>
-            </button>
             <button
               onClick={() => setViewMode('week')}
               className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${

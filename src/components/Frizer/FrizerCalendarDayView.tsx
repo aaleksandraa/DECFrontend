@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight,
-  LayoutGrid,
   Columns,
   CalendarDays,
   Plus
@@ -312,13 +311,6 @@ export function FrizerCalendarDayView({ onViewChange }: FrizerCalendarDayViewPro
         <div className="flex items-center gap-3">
           {onViewChange && (
             <div className="flex items-center bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => onViewChange('month')}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <LayoutGrid className="w-4 h-4" />
-                Mjesec
-              </button>
               <button
                 onClick={() => onViewChange('week')}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
