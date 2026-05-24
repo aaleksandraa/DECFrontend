@@ -8,7 +8,7 @@ import {
   Plus
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { appointmentAPI, staffAPI, serviceAPI, scheduleAPI } from '../../services/api';
+import { appointmentAPI, salonAPI, staffAPI, serviceAPI, scheduleAPI } from '../../services/api';
 import { formatDateEuropean, getCurrentDateEuropean } from '../../utils/dateUtils';
 import { formatTime, formatTimeRange } from '../../utils/timeFormat';
 import { ClientDetailsModal } from '../Common/ClientDetailsModal';
@@ -23,6 +23,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   const [appointments, setAppointments] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
+  const [salonDetails, setSalonDetails] = useState<any>(null);
   const [salonBreaks, setSalonBreaks] = useState<any[]>([]);
   const [staffBreaks, setStaffBreaks] = useState<{ [key: string]: any[] }>({});
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -59,14 +60,15 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
       const endDate = `${String(lastDay.getDate()).padStart(2, '0')}.${String(lastDay.getMonth() + 1).padStart(2, '0')}.${lastDay.getFullYear()}`;
       
       // Load appointments, staff, and services
-      const [appointmentsData, staffData, servicesData] = await Promise.all([
+      const [appointmentsData, staffData, servicesData, salonData] = await Promise.all([
         appointmentAPI.getAppointments({ 
           per_page: 1000,
           start_date: startDate,
           end_date: endDate
         }),
         staffAPI.getStaff(user.salon.id),
-        serviceAPI.getServices(user.salon.id)
+        serviceAPI.getServices(user.salon.id),
+        salonAPI.getSalon(user.salon.id).catch(() => user.salon)
       ]);
       
       const appointmentsArray = Array.isArray(appointmentsData) ? appointmentsData : (appointmentsData?.data || []);
@@ -78,6 +80,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
       setAppointments(salonAppointments);
       setStaff(staffArray);
       setServices(servicesArray);
+      setSalonDetails(salonData);
 
       const [salonBreaksData, staffBreaksEntries] = await Promise.all([
         scheduleAPI.getSalonBreaks(user.salon.id).catch(() => ({ breaks: [] })),
@@ -183,7 +186,8 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
 
   const getSalonWorkingMinutesForDate = (date: Date) => {
     const dayKey = weekDayKeys[date.getDay()];
-    const salonHours = getNormalizedHours(user?.salon?.working_hours?.[dayKey]);
+    const activeSalon = salonDetails || user?.salon;
+    const salonHours = getNormalizedHours(activeSalon?.working_hours?.[dayKey]);
 
     if (!salonHours) return null;
 
