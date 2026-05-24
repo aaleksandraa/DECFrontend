@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Instagram, Facebook, MessageCircle, TrendingUp, Users, CheckCircle, AlertCircle } from 'lucide-react';
 import api from '../../services/api';
 
-type SocialStatus = 'connected' | 'select_page' | 'oauth_cancelled' | 'oauth_missing_code' | 'oauth_invalid_state' | 'oauth_invalid_payload' | 'oauth_state_expired' | 'oauth_invalid_user' | 'error_callback' | 'error_no_salon' | 'error_config';
+type SocialStatus = 'connected' | 'connected_instagram_only' | 'select_page' | 'oauth_cancelled' | 'oauth_missing_code' | 'oauth_invalid_state' | 'oauth_invalid_payload' | 'oauth_state_expired' | 'oauth_invalid_user' | 'premium_required' | 'error_callback' | 'error_no_salon' | 'error_config' | 'error_no_instagram_business' | 'error_instagram_only_unavailable';
 
 interface PendingPage {
   id: string;
@@ -12,12 +12,21 @@ interface PendingPage {
 interface SocialIntegration {
   id: number;
   platform: 'facebook' | 'instagram' | 'both';
+  connection_mode?: 'facebook_page' | 'instagram_only';
   fb_page_name?: string;
   ig_username?: string;
   status: 'active' | 'pending' | 'expired' | 'revoked';
   auto_reply_enabled: boolean;
   business_hours_only?: boolean;
   chatbot_enabled?: boolean;
+  social_integrations_enabled?: boolean;
+  webhook_verified?: boolean;
+  health?: {
+    token_status?: string;
+    missing_scopes?: string[];
+    instagram_business_connected?: boolean;
+    webhook_verified?: boolean;
+  };
   token_expires_at?: string | null;
   connected_at: string;
   stats?: {
@@ -33,6 +42,8 @@ export default function SocialIntegrationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
   const [statusInfo, setStatusInfo] = useState<string | null>(null);
+  const [socialIntegrationsEnabled, setSocialIntegrationsEnabled] = useState(false);
+  const [instagramOnlyAvailable, setInstagramOnlyAvailable] = useState(false);
   const [pendingPages, setPendingPages] = useState<PendingPage[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string>('');
   const [pendingExpiresAt, setPendingExpiresAt] = useState<string | null>(null);
@@ -72,7 +83,10 @@ export default function SocialIntegrationsPage() {
       setLoading(true);
       setError(null);
       const response = await api.get('/admin/social-integrations');
-      setIntegration(response.data.data);
+      const data = response.data?.data;
+      setSocialIntegrationsEnabled(Boolean(data?.social_integrations_enabled));
+      setInstagramOnlyAvailable(Boolean(data?.instagram_only_available));
+      setIntegration(data?.integration ?? (data?.connected ? data : null));
     } catch (err: any) {
       if (err.response?.status === 404) {
         setIntegration(null);
@@ -138,8 +152,8 @@ export default function SocialIntegrationsPage() {
     }
   };
 
-  const handleConnect = () => {
-    window.location.href = '/api/v1/admin/social-integrations/connect';
+  const handleConnect = (mode: 'facebook_page' | 'instagram_only' = 'facebook_page') => {
+    window.location.href = `/api/v1/admin/social-integrations/connect?mode=${mode}`;
   };
 
   const handleDisconnect = async () => {
@@ -201,7 +215,22 @@ export default function SocialIntegrationsPage() {
         </div>
       )}
 
-      {pendingPages.length > 0 ? (
+      {!socialIntegrationsEnabled ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+              <MessageCircle className="w-8 h-8 text-gray-500" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Premium AI DM integracija nije aktivirana</h2>
+              <p className="text-gray-600">Ova premium opcija nije aktivirana za vaš salon.</p>
+            </div>
+          </div>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+            Kontaktirajte Frizerino podršku ili administratora da uključi Instagram/Facebook AI zakazivanje za vaš salon.
+          </div>
+        </div>
+      ) : pendingPages.length > 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Izbor Facebook stranice</h2>
             <p className="text-gray-600 mb-6">
@@ -237,7 +266,7 @@ export default function SocialIntegrationsPage() {
                 {selectingPage ? 'Povezujem...' : 'Potvrdi izbor stranice'}
               </button>
               <button
-                onClick={handleConnect}
+                onClick={() => handleConnect('facebook_page')}
                 disabled={selectingPage}
                 className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-5 rounded-lg transition-colors"
               >
@@ -281,18 +310,31 @@ export default function SocialIntegrationsPage() {
           </div>
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-sm text-yellow-800">
-            Potreban je Instagram Business Account ili Facebook Page.
+            Prije povezivanja provjerite: Instagram je Business/Creator account, imate admin pristup, a za preporučeni tok Instagram je povezan sa Facebook Page.
           </div>
 
-          <button
-            onClick={handleConnect}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-4 px-6 rounded-lg transition-all duration-200 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl"
-          >
-            <MessageCircle className="w-5 h-5" />
-            Povezi Instagram/Facebook
-          </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <button
+              onClick={() => handleConnect('facebook_page')}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-all duration-200 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl"
+            >
+              <Facebook className="w-5 h-5" />
+              Poveži Facebook Page + Instagram
+            </button>
 
-          <p className="text-center text-sm text-gray-500 mt-4">Bicete preusmjereni na Facebook autorizaciju.</p>
+            <button
+              onClick={() => handleConnect('instagram_only')}
+              disabled={!instagramOnlyAvailable}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition-all duration-200 flex items-center justify-center gap-3"
+            >
+              <Instagram className="w-5 h-5" />
+              Poveži samo Instagram
+            </button>
+          </div>
+
+          <p className="text-center text-sm text-gray-500 mt-4">
+            Preporučeni tok je Facebook Page + Instagram. Instagram-only se aktivira nakon Meta App Review odobrenja.
+          </p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -323,9 +365,22 @@ export default function SocialIntegrationsPage() {
                 <p className="text-sm text-gray-500">
                   Povezano: {new Date(integration.connected_at).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Način povezivanja: {integration.connection_mode === 'instagram_only' ? 'Samo Instagram' : 'Facebook Page + Instagram'}
+                </p>
                 {tokenExpiryText && (
                   <p className="text-sm text-amber-700 mt-1">Token istice: {tokenExpiryText}</p>
                 )}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${integration.webhook_verified ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                    Webhook: {integration.webhook_verified ? 'verifikovan' : 'čeka prvu poruku'}
+                  </span>
+                  {integration.health?.missing_scopes && integration.health.missing_scopes.length > 0 && (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                      Nedostaju dozvole: {integration.health.missing_scopes.join(', ')}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <button
@@ -441,6 +496,8 @@ function getStatusMessage(status: SocialStatus): string {
   switch (status) {
     case 'connected':
       return 'Instagram/Facebook integracija je uspjesno povezana.';
+    case 'connected_instagram_only':
+      return 'Instagram-only integracija je uspjesno povezana.';
     case 'select_page':
       return 'Izaberite koju Facebook stranicu zelite povezati.';
     case 'oauth_cancelled':
@@ -453,10 +510,16 @@ function getStatusMessage(status: SocialStatus): string {
       return 'OAuth sigurnosna provjera nije uspjela. Pokusajte ponovo.';
     case 'oauth_invalid_user':
       return 'OAuth sesija ne pripada trenutno prijavljenom korisniku. Pokrenite povezivanje ponovo.';
+    case 'premium_required':
+      return 'Premium AI DM integracija nije aktivirana za ovaj salon.';
     case 'error_no_salon':
       return 'Salon nije pronadjen za prijavljenog korisnika.';
     case 'error_config':
       return 'Meta konfiguracija nije kompletna (APP ID/SECRET).';
+    case 'error_no_instagram_business':
+      return 'Izabrana Facebook stranica nema povezan Instagram Business account.';
+    case 'error_instagram_only_unavailable':
+      return 'Instagram-only povezivanje jos nije aktivno za ovu Meta aplikaciju. Koristite Facebook Page + Instagram tok.';
     default:
       return 'Doslo je do greske pri povezivanju integracije.';
   }

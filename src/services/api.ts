@@ -890,6 +890,16 @@ export const adminAPI = {
     const response = await api.get('/admin/analytics', { params });
     return response.data;
   },
+
+  getBookingSafetyReport: async () => {
+    const response = await api.get('/admin/booking-safety/report');
+    return response.data;
+  },
+
+  runBookingSafetyBackfill: async () => {
+    const response = await api.post('/admin/booking-safety/backfill', { confirm: true });
+    return response.data;
+  },
   
   // System settings
   getSettings: async (group?: string) => {
@@ -1268,13 +1278,11 @@ export const widgetAPI = {
     date: string;
     services: Array<{ serviceId: string; duration: number }>;
   }) => {
-    const response = await api.get('/widget/slots/available', {
-      params: {
+    const response = await api.post('/widget/slots/available', {
         key: apiKey,
         staff_id: params.staff_id,
         date: params.date,
         services: params.services
-      }
     });
     return response.data;
   },

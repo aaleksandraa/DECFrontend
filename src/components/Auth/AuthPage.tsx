@@ -52,7 +52,10 @@ export function AuthPage({ mode }: AuthPageProps) {
   // Registration settings
   const [allowFrizerRegistration, setAllowFrizerRegistration] = useState(false);
 
-  const returnTo = (location.state as any)?.returnTo;
+  const returnTo = (location.state as any)?.returnTo
+    || (mode === 'login' && !['/login', '/prijava'].includes(location.pathname)
+      ? `${location.pathname}${location.search}`
+      : undefined);
 
 
 

@@ -114,16 +114,6 @@ export const WidgetBooking: React.FC = () => {
       
       {/* Booking Modal (always open in widget) */}
       <div className="max-w-2xl mx-auto p-4">
-        {/* DEBUG: Version indicator - REMOVE AFTER TESTING */}
-        <div className="bg-yellow-100 border-2 border-yellow-500 p-3 rounded-lg mb-4 text-center">
-          <p className="text-sm font-bold text-yellow-900">
-            🔧 Widget Verzija: 2024-12-28-v4 (TEST)
-          </p>
-          <p className="text-xs text-yellow-700 mt-1">
-            Ako vidiš ovu poruku, novi kod je učitan!
-          </p>
-        </div>
-        
         <GuestBookingModal
           isOpen={true}
           onClose={() => {}} // No close in widget
@@ -139,6 +129,7 @@ export const WidgetBooking: React.FC = () => {
           staff={staff}
           user={null}
           isWidget={true}
+          widgetApiKey={apiKey || undefined}
         />
       </div>
       

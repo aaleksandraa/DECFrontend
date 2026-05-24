@@ -25,6 +25,9 @@ interface HealthRow {
   integration_id: number;
   integration_status: string;
   platform: 'facebook' | 'instagram' | 'both';
+  connection_mode?: 'facebook_page' | 'instagram_only';
+  social_integrations_enabled?: boolean;
+  chatbot_enabled?: boolean;
   fb_page_name: string | null;
   ig_username: string | null;
   token_expires_at: string | null;
@@ -166,7 +169,12 @@ export function AdminSocialIntegrationsHealth() {
                       <td className="px-4 py-4 align-top">
                         <p className="text-sm font-medium text-gray-900">{row.fb_page_name || '-'}</p>
                         <p className="text-xs text-gray-500">
-                          {row.platform === 'both' ? 'Facebook + Instagram' : row.platform}
+                          {row.connection_mode === 'instagram_only'
+                            ? 'Samo Instagram'
+                            : row.platform === 'both' ? 'Facebook + Instagram' : row.platform}
+                        </p>
+                        <p className={`text-xs mt-1 ${row.social_integrations_enabled ? 'text-purple-700' : 'text-gray-500'}`}>
+                          Premium DM: {row.social_integrations_enabled ? 'ukljucen' : 'iskljucen'}
                         </p>
                         {row.ig_username && (
                           <p className="text-xs text-purple-700 mt-1">@{row.ig_username}</p>

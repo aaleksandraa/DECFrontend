@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { publicAPI, appointmentAPI } from '../../services/api';
+import { publicAPI, appointmentAPI, widgetAPI } from '../../services/api';
 import { Service, Staff, User, Break, Vacation } from '../../types';
 import SuccessModal from '../Common/SuccessModal';
 import { ServiceSelector } from '../Common/ServiceSelector';
@@ -43,6 +43,7 @@ interface GuestBookingModalProps {
   preselectedStaff?: Staff;
   user?: User | null;
   isWidget?: boolean; // Skip step 0 on widget
+  widgetApiKey?: string;
 }
 
 interface GuestData {
@@ -73,7 +74,8 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
   preselectedService,
   preselectedStaff,
   user,
-  isWidget = false
+  isWidget = false,
+  widgetApiKey
 }) => {
   const navigate = useNavigate();
   
@@ -126,6 +128,11 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
   // Success state
   const [showSuccess, setShowSuccess] = useState(false);
   const [createdAppointment, setCreatedAppointment] = useState<any>(null);
+  const bookingIdempotencyKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    bookingIdempotencyKeyRef.current = null;
+  }, [selectedDate, selectedTime, selectedStaffId, selectedServices, guestData.guest_phone]);
 
   // Initialize with preselected service
   useEffect(() => {
@@ -242,11 +249,17 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
 
       // OPTIMIZED: Single API call to get all available dates for the month
       try {
-        const response = await publicAPI.getAvailableDatesForMonth(String(salon.id), {
-          staff_id: Number(selectedStaffId),
-          month: monthStr,
-          services: servicesData
-        });
+        const response = isWidget && widgetApiKey
+          ? await widgetAPI.getAvailableDates(widgetApiKey, {
+              staff_id: Number(selectedStaffId),
+              month: monthStr,
+              services: servicesData.map(({ serviceId, duration }) => ({ serviceId, duration }))
+            })
+          : await publicAPI.getAvailableDatesForMonth(String(salon.id), {
+              staff_id: Number(selectedStaffId),
+              month: monthStr,
+              services: servicesData
+            });
         
         setLoadingProgress(80);
         
@@ -281,11 +294,17 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
           if (formattedDate === todayStr) {
             // For today, we need to verify there are slots after current time
             try {
-              const slotsResponse = await publicAPI.getAvailableSlotsForMultipleServices(
-                String(salon.id),
-                formattedDate,
-                servicesData
-              );
+              const slotsResponse = isWidget && widgetApiKey
+                ? await widgetAPI.getAvailableSlots(widgetApiKey, {
+                    staff_id: Number(selectedStaffId),
+                    date: formattedDate,
+                    services: servicesData.map(({ serviceId, duration }) => ({ serviceId, duration }))
+                  })
+                : await publicAPI.getAvailableSlotsForMultipleServices(
+                    String(salon.id),
+                    formattedDate,
+                    servicesData
+                  );
               const slots = (slotsResponse.slots || []).filter((slot: string) => slot > currentTimeStr);
               if (slots.length > 0) {
                 datesSet.add(formattedDate);
@@ -332,11 +351,17 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
           duration: s.service?.duration || 0
         }));
 
-      const response = await publicAPI.getAvailableSlotsForMultipleServices(
-        String(salon.id),
-        selectedDate,
-        servicesData
-      );
+      const response = isWidget && widgetApiKey
+        ? await widgetAPI.getAvailableSlots(widgetApiKey, {
+            staff_id: Number(selectedStaffId),
+            date: selectedDate,
+            services: servicesData.map(({ serviceId, duration }) => ({ serviceId, duration }))
+          })
+        : await publicAPI.getAvailableSlotsForMultipleServices(
+            String(salon.id),
+            selectedDate,
+            servicesData
+          );
       
       let slots = response.slots || [];
       
@@ -694,8 +719,12 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
   };
 
   const handleSubmit = async () => {
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
+
+      if (!bookingIdempotencyKeyRef.current) {
+        bookingIdempotencyKeyRef.current = crypto.randomUUID();
+      }
 
     try {
       // Create ONE appointment with all services
@@ -707,6 +736,7 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
         staff_id: Number(selectedStaffId),
         date: selectedDate,
         time: selectedTime,
+        idempotency_key: bookingIdempotencyKeyRef.current,
         notes
       };
       
@@ -731,6 +761,8 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
       let response;
       if (user) {
         response = await appointmentAPI.createAppointment(appointmentData);
+      } else if (isWidget && widgetApiKey) {
+        response = await widgetAPI.book(widgetApiKey, appointmentData);
       } else {
         response = await publicAPI.bookAsGuest(appointmentData);
       }
@@ -740,16 +772,18 @@ export const GuestBookingModal: React.FC<GuestBookingModalProps> = ({
       setShowSuccess(true);
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Greška pri rezervaciji. Pokušajte ponovo.';
-      
+      const apiErrorCode = err.response?.data?.code;
+      const displayErrorMessage = err.response?.data?.error || errorMessage;
+
       // Check if it's a double booking error - go back to time selection
-      if (errorMessage.includes('upravo zauzet') || errorMessage.includes('nije dostupan') || errorMessage.includes('double booking')) {
+      if (apiErrorCode === 'TIME_SLOT_TAKEN' || displayErrorMessage.includes('upravo zauzet') || displayErrorMessage.includes('nije dostupan') || displayErrorMessage.includes('double booking')) {
         setError('Neko je u međuvremenu zakazao ovaj termin. Molimo odaberite drugo vrijeme.');
         setSelectedTime(''); // Clear selected time
         setStep(3); // Go back to date/time selection
         // Reload available slots
         loadAvailableSlots();
       } else {
-        setError(errorMessage);
+        setError(displayErrorMessage);
       }
     } finally {
       setLoading(false);

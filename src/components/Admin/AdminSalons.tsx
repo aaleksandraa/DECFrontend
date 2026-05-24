@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, MapPin, Star, Eye, CheckCircle, XCircle, Edit } from 'lucide-react';
+import { Search, Filter, MapPin, Star, Eye, CheckCircle, XCircle, Edit, MessageCircle } from 'lucide-react';
 import { adminAPI } from '../../services/api';
 import { SalonDetailModal } from './AdminModals';
 
@@ -7,6 +7,7 @@ export function AdminSalons() {
   const [salons, setSalons] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [premiumDmFilter, setPremiumDmFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   
   // Modal states
@@ -15,7 +16,7 @@ export function AdminSalons() {
 
   useEffect(() => {
     loadSalons();
-  }, [searchTerm, statusFilter]);
+  }, [searchTerm, statusFilter, premiumDmFilter]);
 
   const loadSalons = async () => {
     try {
@@ -28,6 +29,10 @@ export function AdminSalons() {
       
       if (statusFilter !== 'all') {
         params.status = statusFilter;
+      }
+
+      if (premiumDmFilter !== 'all') {
+        params.social_integrations_enabled = premiumDmFilter === 'enabled';
       }
       
       const response = await adminAPI.getSalons(params);
@@ -72,6 +77,17 @@ export function AdminSalons() {
     } catch (error) {
       console.error('Error updating salon:', error);
       throw error;
+    }
+  };
+
+  const handleTogglePremiumDm = async (salon: any) => {
+    try {
+      await adminAPI.updateSalon(String(salon.id), {
+        social_integrations_enabled: !salon.social_integrations_enabled,
+      });
+      loadSalons();
+    } catch (error) {
+      console.error('Error toggling premium DM integration:', error);
     }
   };
 
@@ -184,6 +200,16 @@ export function AdminSalons() {
             <option value="pending">Na čekanju</option>
             <option value="suspended">Suspendovani</option>
           </select>
+
+          <select
+            value={premiumDmFilter}
+            onChange={(e) => setPremiumDmFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">Premium DM: svi</option>
+            <option value="enabled">Premium DM ukljucen</option>
+            <option value="disabled">Premium DM iskljucen</option>
+          </select>
           
           <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
             <Filter className="w-4 h-4" />
@@ -220,6 +246,12 @@ export function AdminSalons() {
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(salon.status)}`}>
                           {getStatusText(salon.status)}
                         </span>
+                        {salon.social_integrations_enabled && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            <MessageCircle className="w-3 h-3" />
+                            AI DM Premium
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-gray-600 text-sm mb-1">
                         <MapPin className="w-4 h-4" />
@@ -296,6 +328,18 @@ export function AdminSalons() {
                 >
                   <Edit className="w-4 h-4" />
                   Uredi
+                </button>
+
+                <button
+                  onClick={() => handleTogglePremiumDm(salon)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm ${
+                    salon.social_integrations_enabled
+                      ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  {salon.social_integrations_enabled ? 'Isključi Premium DM' : 'Uključi Premium DM'}
                 </button>
               </div>
             </div>

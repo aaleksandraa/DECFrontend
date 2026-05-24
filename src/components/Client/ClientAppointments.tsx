@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, MapPin, User, Phone, Mail, Star, CheckCircle, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ReviewModal } from './ReviewModal';
 import { ConfirmModal } from './ConfirmModal';
 import { appointmentAPI, reviewAPI } from '../../services/api';
@@ -9,10 +9,13 @@ import { appointmentAPI, reviewAPI } from '../../services/api';
 export function ClientAppointments() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('upcoming');
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [reviewLinkMessage, setReviewLinkMessage] = useState<string | null>(null);
+  const [reviewLinkHandled, setReviewLinkHandled] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
@@ -40,6 +43,46 @@ export function ClientAppointments() {
       window.removeEventListener('switchAppointmentTab', handleTabSwitch as EventListener);
     };
   }, [user]);
+
+  useEffect(() => {
+    const appointmentId = searchParams.get('review_appointment_id');
+
+    if (!appointmentId || !user || loading || reviewLinkHandled) {
+      return;
+    }
+
+    const openReviewFromEmail = async () => {
+      setReviewLinkHandled(true);
+      setActiveTab('past');
+      setReviewLinkMessage(null);
+
+      try {
+        const appointment = await appointmentAPI.getAppointment(appointmentId);
+
+        if (appointment.status !== 'completed') {
+          setReviewLinkMessage('Ovaj termin jos nije zavrsen i trenutno ga nije moguce ocijeniti.');
+          return;
+        }
+
+        if (appointment.review) {
+          setReviewLinkMessage('Recenzija za ovaj termin je vec ostavljena.');
+          return;
+        }
+
+        setSelectedAppointment(appointment);
+        setShowReviewModal(true);
+      } catch (error) {
+        console.error('Error opening review appointment:', error);
+        setReviewLinkMessage('Termin za recenziju nije pronadjen ili nemate pristup tom terminu.');
+      } finally {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete('review_appointment_id');
+        setSearchParams(nextParams, { replace: true });
+      }
+    };
+
+    openReviewFromEmail();
+  }, [searchParams, setSearchParams, user, loading, reviewLinkHandled]);
 
   const loadAppointments = async () => {
     if (!user) return;
@@ -299,6 +342,19 @@ export function ClientAppointments() {
             className="ml-auto text-green-600 hover:text-green-800"
           >
             ×
+          </button>
+        </div>
+      )}
+
+      {reviewLinkMessage && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-center gap-3">
+          <Mail className="w-5 h-5 text-yellow-700 flex-shrink-0" />
+          <p className="text-yellow-800 text-sm">{reviewLinkMessage}</p>
+          <button
+            onClick={() => setReviewLinkMessage(null)}
+            className="ml-auto text-yellow-700 hover:text-yellow-900"
+          >
+            x
           </button>
         </div>
       )}

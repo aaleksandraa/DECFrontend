@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { publicAPI, reviewAPI, favoriteAPI } from '../../services/api';
+import { publicAPI, favoriteAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useAppearance } from '../../context/AppearanceContext';
 import { Salon, Service, Staff, Review } from '../../types';
@@ -72,18 +72,14 @@ export const PublicSalonPage: React.FC = () => {
   // Description expanded state (for mobile)
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
-  // Review form state
-  const [showReviewForm, setShowReviewForm] = useState(false);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState('');
-  const [reviewStaffId, setReviewStaffId] = useState<string>('');
-  const [submittingReview, setSubmittingReview] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
+  // Legacy public review handler is disabled but kept as a no-op redirect target.
+  const [, setSubmittingReview] = useState(false);
+  const [, setReviewError] = useState<string | null>(null);
+  const reviewSuccess = false;
 
   // Favorite state
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
-  const [reviewSuccess, setReviewSuccess] = useState(false);
   const reviewFormRef = useRef<HTMLDivElement>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
@@ -98,14 +94,10 @@ export const PublicSalonPage: React.FC = () => {
 
   // Handle writeReview query parameter
   useEffect(() => {
-    if (searchParams.get('writeReview') === 'true' && user && !loading && salon) {
-      setShowReviewForm(true);
-      // Scroll to review form after a short delay
-      setTimeout(() => {
-        reviewFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100);
+    if (searchParams.get('writeReview') === 'true' && !loading && salon) {
+      navigate('/moji-termini');
     }
-  }, [searchParams, user, loading, salon]);
+  }, [searchParams, loading, salon, navigate]);
 
   const loadSalonData = async () => {
     if (!slug) return;
@@ -180,35 +172,13 @@ export const PublicSalonPage: React.FC = () => {
     }
   };
 
-  // Submit review
+  // Deprecated public review submission is intentionally disabled.
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!salon || !user) return;
-
-    setSubmittingReview(true);
-    setReviewError(null);
+    navigate('/moji-termini');
+    return;
 
     try {
-      const reviewData = {
-        salon_id: salon.id,
-        rating: reviewRating,
-        comment: reviewComment.trim() || null,
-        staff_id: reviewStaffId ? parseInt(reviewStaffId) : null,
-      };
-
-      await reviewAPI.createReview(reviewData);
-      
-      setReviewSuccess(true);
-      setShowReviewForm(false);
-      setReviewRating(5);
-      setReviewComment('');
-      setReviewStaffId('');
-      
-      // Reload salon data to show new review
-      await loadSalonData();
-      
-      // Hide success message after 5 seconds
-      setTimeout(() => setReviewSuccess(false), 5000);
     } catch (err: any) {
       console.error('Error submitting review:', err);
       setReviewError(err.response?.data?.message || 'Greška pri slanju recenzije. Možda ste već ocijenili ovaj salon.');
