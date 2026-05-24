@@ -31,7 +31,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
     today.setHours(0, 0, 0, 0);
     return today;
   });
-  const [selectedStaff, setSelectedStaff] = useState<string>('');
+  const [selectedStaff, setSelectedStaff] = useState<string>('all');
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
@@ -96,9 +96,6 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
       setAppointments(salonAppointments);
       setStaff(staffArray);
       setServices(servicesArray);
-      if (selectedStaff === '' && staffArray.length > 0) {
-        setSelectedStaff(String(staffArray[0].id));
-      }
 
       const [salonBreaksData, staffBreaksEntries] = await Promise.all([
         scheduleAPI.getSalonBreaks(user.salon.id).catch(() => ({ breaks: [] })),

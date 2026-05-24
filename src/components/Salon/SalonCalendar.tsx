@@ -33,7 +33,7 @@ export function SalonCalendar() {
   const [services, setServices] = useState<any[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedStaff, setSelectedStaff] = useState<string>('');
+  const [selectedStaff, setSelectedStaff] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [highlightedAppointment, setHighlightedAppointment] = useState<number | null>(null);
   const [selectedClient, setSelectedClient] = useState<any>(null);
@@ -134,9 +134,6 @@ export function SalonCalendar() {
       setAppointments(salonAppointments);
       setStaff(staffArray);
       setServices(servicesArray);
-      if (selectedStaff === '' && staffArray.length > 0) {
-        setSelectedStaff(String(staffArray[0].id));
-      }
 
       // Set today as selected date only if not keeping current date
       if (!keepSelectedDate || !currentSelectedDate) {
