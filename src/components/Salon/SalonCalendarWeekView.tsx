@@ -31,7 +31,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
     today.setHours(0, 0, 0, 0);
     return today;
   });
-  const [selectedStaff, setSelectedStaff] = useState<string>('all');
+  const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
@@ -96,6 +96,9 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
       setAppointments(salonAppointments);
       setStaff(staffArray);
       setServices(servicesArray);
+      if (selectedStaff === '' && staffArray.length > 0) {
+        setSelectedStaff(String(staffArray[0].id));
+      }
 
       const [salonBreaksData, staffBreaksEntries] = await Promise.all([
         scheduleAPI.getSalonBreaks(user.salon.id).catch(() => ({ breaks: [] })),
@@ -193,12 +196,15 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
     return false;
   };
 
-  const getActiveBreaksForSlot = (date: Date, hour: number, minute: number) => {
+  const getSelectedStaffId = () => selectedStaff || (staff[0]?.id ? String(staff[0].id) : 'all');
+
+  const getActiveBreaksForSlot = (date: Date, hour: number, minute: number, staffId?: string) => {
     const slotStartMinutes = hour * 60 + minute;
     const slotEndMinutes = slotStartMinutes + 30;
+    const activeStaffId = staffId || getSelectedStaffId();
     const activeBreaks = [
       ...salonBreaks,
-      ...(selectedStaff !== 'all' ? staffBreaks[selectedStaff] || [] : [])
+      ...(activeStaffId !== 'all' ? staffBreaks[activeStaffId] || [] : [])
     ];
 
     return activeBreaks.filter((breakItem) => {
@@ -230,9 +236,11 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
 
   // Get working hours from salon or selected staff (earliest/latest across all days for week view)
   const getWorkingHours = () => {
+    const activeStaffId = getSelectedStaffId();
+
     // If specific staff is selected, use their working hours
-    if (selectedStaff !== 'all') {
-      const staffMember = staff.find(s => String(s.id) === String(selectedStaff));
+    if (activeStaffId !== 'all') {
+      const staffMember = staff.find(s => String(s.id) === String(activeStaffId));
       if (staffMember?.working_hours) {
         // Extract earliest start and latest end from working hours
         const hours = staffMember.working_hours;
@@ -278,16 +286,17 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
   };
 
   // Check if a specific day, hour and minute is within working hours
-  const isWithinWorkingHours = (day: Date, hour: number, minute: number = 0): boolean => {
+  const isWithinWorkingHours = (day: Date, hour: number, minute: number = 0, staffId?: string): boolean => {
     const dayOfWeek = day.getDay();
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayKey = dayNames[dayOfWeek];
     
     const timeInMinutes = hour * 60 + minute;
+    const activeStaffId = staffId || getSelectedStaffId();
     
     // If specific staff is selected, check their working hours
-    if (selectedStaff !== 'all') {
-      const staffMember = staff.find(s => String(s.id) === String(selectedStaff));
+    if (activeStaffId !== 'all') {
+      const staffMember = staff.find(s => String(s.id) === String(activeStaffId));
       if (staffMember?.working_hours?.[dayKey]) {
         const dayHours = staffMember.working_hours[dayKey];
         if (dayHours?.is_working && dayHours.start && dayHours.end) {
@@ -358,8 +367,9 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
   };
 
   // Get appointments for a specific date and 30-minute slot
-  const getAppointmentsForSlot = (date: Date, hour: number, minute: number) => {
+  const getAppointmentsForSlot = (date: Date, hour: number, minute: number, staffId?: string) => {
     const dateStr = formatDateEuropean(date);
+    const activeStaffId = staffId || getSelectedStaffId();
     
     let dayAppointments = appointments.filter(app => {
       if (app.date !== dateStr) return false;
@@ -381,8 +391,8 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
       return appStartMinutes < slotEndMinutes && appEndMinutes > slotStartMinutes;
     });
 
-    if (selectedStaff !== 'all') {
-      dayAppointments = dayAppointments.filter(app => String(app.staff_id) === String(selectedStaff));
+    if (activeStaffId !== 'all') {
+      dayAppointments = dayAppointments.filter(app => String(app.staff_id) === String(activeStaffId));
     }
 
     return dayAppointments;
@@ -441,7 +451,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
   };
 
   const getStaffName = (staffId: string) => {
-    const staffMember = staff.find(s => s.id === staffId);
+    const staffMember = staff.find(s => String(s.id) === String(staffId));
     return staffMember?.name || 'Nepoznat zaposleni';
   };
 
@@ -457,6 +467,85 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
 
   const weekDays = getWeekDays();
   const timeSlots = generateTimeSlots();
+  const isAllStaffView = selectedStaff === 'all' && staff.length > 0;
+  const dayColumnMinWidth = isAllStaffView ? Math.max(staff.length * 120, 160) : 96;
+  const calendarGridTemplateColumns = `88px repeat(7, minmax(${dayColumnMinWidth}px, 1fr))`;
+  const staffGridTemplateColumns = `repeat(${Math.max(staff.length, 1)}, minmax(120px, 1fr))`;
+
+  const renderSlotContent = (
+    day: Date,
+    slot: { hour: number; minute: number; label: string },
+    staffId?: string
+  ) => {
+    const slotAppointments = getAppointmentsForSlot(day, slot.hour, slot.minute, staffId);
+    const slotBreaks = getActiveBreaksForSlot(day, slot.hour, slot.minute, staffId);
+
+    return (
+      <>
+        {slotBreaks.map((breakItem) => {
+          const breakStartMinutes = parseInt(breakItem.start_time.split(':')[0]) * 60 + parseInt(breakItem.start_time.split(':')[1]);
+          const slotStartMinutes = slot.hour * 60 + slot.minute;
+          if (breakStartMinutes !== slotStartMinutes) return null;
+
+          return (
+            <div
+              key={`break-${breakItem.id}`}
+              className="absolute left-1.5 right-1.5 rounded-md border border-amber-200 bg-amber-50/95 px-2 py-1.5 text-amber-900 shadow-sm overflow-hidden"
+              style={getBreakStyle(breakItem, slot.hour, slot.minute)}
+            >
+              <div className="text-[11px] font-semibold truncate">{breakItem.title || 'Pauza'}</div>
+              <div className="text-[10px] text-amber-700 truncate">
+                {breakItem.start_time} - {breakItem.end_time}
+              </div>
+            </div>
+          );
+        })}
+
+        {slotAppointments.map((appointment) => {
+          const appHour = parseInt(appointment.time.split(':')[0]);
+          const appMinute = parseInt(appointment.time.split(':')[1]);
+          const appStartMinutes = appHour * 60 + appMinute;
+          const slotStartMinutes = slot.hour * 60 + slot.minute;
+
+          if (appStartMinutes !== slotStartMinutes) return null;
+
+          const style = getAppointmentStyle(appointment, slot.hour, slot.minute);
+          const additionalServices = appointment.notes
+            ? appointment.notes.replace('Dodatne usluge: ', '').split(', ').filter((s: string) => s.trim())
+            : [];
+
+          return (
+            <div
+              key={appointment.id}
+              className={`absolute left-1.5 right-1.5 rounded-lg border-2 p-2 cursor-pointer hover:shadow-lg transition-all overflow-hidden shadow-sm ${getStatusColor(appointment.status)}`}
+              style={style}
+              onClick={() => handleAppointmentClick(appointment)}
+            >
+              <div className="text-xs font-bold truncate mb-1">
+                {appointment.time} - {appointment.end_time}
+              </div>
+              <div className="text-xs font-semibold truncate mb-1">
+                {appointment.client_name}
+              </div>
+              <div className="text-xs truncate opacity-90">
+                {getServiceName(appointment)}
+              </div>
+              {selectedStaff === 'all' && !staffId && (
+                <div className="text-xs truncate opacity-75 mt-1">
+                  {getStaffName(appointment.staff_id)}
+                </div>
+              )}
+              {additionalServices.length > 0 && additionalServices.map((service: string, idx: number) => (
+                <div key={idx} className="text-xs truncate opacity-90 mt-0.5">
+                  {service}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </>
+    );
+  };
 
   if (loading) {
     return (
@@ -510,7 +599,7 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
           <div className="flex items-center gap-2">
             <Filter className="w-5 h-5 text-gray-400" />
             <select
-              value={selectedStaff}
+              value={getSelectedStaffId()}
               onChange={(e) => setSelectedStaff(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
@@ -628,9 +717,15 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
       {/* Calendar Grid */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="overflow-x-auto">
-          <div className="min-w-[800px]">
+          <div
+            className="min-w-[800px]"
+            style={isAllStaffView ? { minWidth: `${88 + 7 * dayColumnMinWidth}px` } : undefined}
+          >
             {/* Header with days */}
-            <div className="grid grid-cols-[88px_repeat(7,minmax(96px,1fr))] border-b-2 border-gray-200 bg-gray-50">
+            <div
+              className="grid border-b-2 border-gray-200 bg-gray-50"
+              style={{ gridTemplateColumns: calendarGridTemplateColumns }}
+            >
               <div className="px-3 py-4 text-sm font-bold text-gray-600 border-r border-gray-200 sticky left-0 bg-gray-50 z-20">
                 Vrijeme
               </div>
@@ -666,6 +761,18 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                         </span>
                       </div>
                     )}
+                    {isAllStaffView && (
+                      <div
+                        className="mt-3 grid gap-px border-t border-gray-200 pt-2 text-[11px] font-semibold text-gray-500"
+                        style={{ gridTemplateColumns: staffGridTemplateColumns }}
+                      >
+                        {staff.map((staffMember) => (
+                          <div key={staffMember.id} className="truncate px-1">
+                            {staffMember.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -679,8 +786,8 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                 return (
                 <div 
                   key={`${slot.hour}-${slot.minute}`} 
-                  className="grid grid-cols-[88px_repeat(7,minmax(96px,1fr))] transition-all bg-white" 
-                  style={{ minHeight: '70px', paddingTop: isFirstSlot ? '18px' : undefined }}
+                  className="grid transition-all bg-white" 
+                  style={{ minHeight: '70px', paddingTop: isFirstSlot ? '18px' : undefined, gridTemplateColumns: calendarGridTemplateColumns }}
                 >
                   {/* Time axis */}
                   <div className="relative border-r border-gray-200 sticky left-0 z-10 bg-white">
@@ -711,6 +818,21 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                           isToday ? 'bg-blue-50/50' : ''
                         } ${!isWorkingHour ? 'bg-gray-100' : ''}`}
                       >
+                        {isAllStaffView ? (
+                          <div className="grid h-full" style={{ gridTemplateColumns: staffGridTemplateColumns }}>
+                            {staff.map((staffMember, staffIndex) => (
+                              <div
+                                key={staffMember.id}
+                                className={`relative min-h-[70px] ${staffIndex < staff.length - 1 ? 'border-r border-gray-200' : ''} ${
+                                  !isWithinWorkingHours(day, slot.hour, slot.minute, String(staffMember.id)) ? 'bg-gray-100/70' : ''
+                                }`}
+                              >
+                                {renderSlotContent(day, slot, String(staffMember.id))}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <>
                         {/* Show explicit breaks/custom schedule blocks only. Available empty slots stay blank. */}
                         {slotBreaks.map((breakItem) => {
                           const breakStartMinutes = parseInt(breakItem.start_time.split(':')[0]) * 60 + parseInt(breakItem.start_time.split(':')[1]);
@@ -775,8 +897,10 @@ export function SalonCalendarWeekView({ onViewChange }: SalonCalendarWeekViewPro
                                 </div>
                               ))}
                             </div>
-                          );
+                            );
                         })}
+                          </>
+                        )}
                       </div>
                     );
                   })}

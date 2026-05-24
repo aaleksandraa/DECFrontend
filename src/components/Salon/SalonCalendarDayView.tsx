@@ -25,7 +25,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   const [services, setServices] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
-  const [selectedStaff, setSelectedStaff] = useState<string>('all');
+  const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
@@ -76,6 +76,9 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
       setAppointments(salonAppointments);
       setStaff(staffArray);
       setServices(servicesArray);
+      if (selectedStaff === '' && staffArray.length > 0) {
+        setSelectedStaff(String(staffArray[0].id));
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -104,24 +107,25 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
     }
   };
 
+  const getSelectedStaffId = () => selectedStaff || (staff[0]?.id ? String(staff[0].id) : 'all');
+
   // Get working hours for the selected date
-  const getWorkingHours = () => {
+  const getWorkingHours = (staffId?: string) => {
     // Get day of week for selected date (0 = Sunday, 1 = Monday, etc.)
     const dayOfWeek = selectedDate.getDay();
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayKey = dayNames[dayOfWeek];
     
-    console.log('Getting working hours for:', dayKey, selectedDate);
-    
+    const activeStaffId = staffId || getSelectedStaffId();
+
     // If specific staff is selected, use their working hours for this day
-    if (selectedStaff !== 'all') {
-      const staffMember = staff.find(s => String(s.id) === String(selectedStaff));
+    if (activeStaffId !== 'all') {
+      const staffMember = staff.find(s => String(s.id) === String(activeStaffId));
       if (staffMember?.working_hours && staffMember.working_hours[dayKey]) {
         const dayHours = staffMember.working_hours[dayKey];
         if (dayHours.is_working && dayHours.start && dayHours.end) {
           const startHour = parseInt(dayHours.start.split(':')[0]);
           const endHour = parseInt(dayHours.end.split(':')[0]);
-          console.log('Using staff working hours for', dayKey, ':', startHour, '-', endHour);
           return { start: startHour, end: endHour };
         }
       }
@@ -133,19 +137,13 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
       if (dayHours?.is_open && dayHours.open && dayHours.close) {
         const startHour = parseInt(dayHours.open.split(':')[0]);
         const endHour = parseInt(dayHours.close.split(':')[0]);
-        console.log('Using salon working hours for', dayKey, ':', startHour, '-', endHour);
         return { start: startHour, end: endHour };
       }
     }
     
     // If no working hours found for this day, salon is closed
-    console.log('No working hours found for', dayKey, '- salon is closed');
     return { start: 9, end: 9 }; // Return same start/end to show no working hours
   };
-
-  const workingHours = getWorkingHours();
-  const workingHoursStart = workingHours.start;
-  const workingHoursEnd = workingHours.end;
 
   // Get days in month for mini calendar
   const getDaysInMonth = (date: Date) => {
@@ -170,22 +168,21 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   };
 
   // Get appointments for selected date
-  const getDayAppointments = () => {
+  const getDayAppointments = (staffId?: string) => {
     const dateStr = formatDateEuropean(selectedDate);
-    console.log('Getting appointments for:', dateStr, 'Total appointments:', appointments.length);
+    const activeStaffId = staffId || getSelectedStaffId();
     
     let dayAppointments = appointments.filter(app => app.date === dateStr);
 
-    if (selectedStaff !== 'all') {
-      dayAppointments = dayAppointments.filter(app => String(app.staff_id) === String(selectedStaff));
+    if (activeStaffId !== 'all') {
+      dayAppointments = dayAppointments.filter(app => String(app.staff_id) === String(activeStaffId));
     }
 
-    console.log('Found appointments:', dayAppointments.length);
     return dayAppointments.sort((a, b) => a.time.localeCompare(b.time));
   };
 
   // Calculate day availability (for mini calendar colors)
-  const getDayAvailability = (day: number): 'full' | 'partial' | 'free' => {
+  const getDayAvailability = (day: number, staffId?: string): 'full' | 'partial' | 'free' => {
     if (!day) return 'free';
     
     const date = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), day);
@@ -196,13 +193,14 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
     const dayOfWeek = date.getDay();
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayKey = dayNames[dayOfWeek];
+    const activeStaffId = staffId || getSelectedStaffId();
     
     let dayWorkingStartMinutes = 9 * 60;
     let dayWorkingEndMinutes = 17 * 60;
     
     // If specific staff is selected, use their working hours for this day
-    if (selectedStaff !== 'all') {
-      const staffMember = staff.find(s => String(s.id) === String(selectedStaff));
+    if (activeStaffId !== 'all') {
+      const staffMember = staff.find(s => String(s.id) === String(activeStaffId));
       if (staffMember?.working_hours && staffMember.working_hours[dayKey]) {
         const dayHours = staffMember.working_hours[dayKey];
         if (dayHours.is_working && dayHours.start && dayHours.end) {
@@ -274,12 +272,13 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   };
 
   // Generate time slots with appointments and free slots
-  const generateTimeSlots = () => {
-    const dayAppointments = getDayAppointments();
+  const generateTimeSlots = (staffId?: string) => {
+    const staffWorkingHours = getWorkingHours(staffId);
+    const dayAppointments = getDayAppointments(staffId);
     const slots: Array<{ type: 'appointment' | 'free'; data?: any; startTime: string; endTime: string; duration: number }> = [];
     
-    let currentMinutes = workingHoursStart * 60;
-    const endMinutes = workingHoursEnd * 60;
+    let currentMinutes = staffWorkingHours.start * 60;
+    const endMinutes = staffWorkingHours.end * 60;
     
     // Sort appointments by time
     const sortedAppointments = [...dayAppointments].sort((a, b) => a.time.localeCompare(b.time));
@@ -361,7 +360,6 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   // Go to today
   const goToToday = () => {
     const today = new Date();
-    console.log('Going to today:', today, formatDateEuropean(today));
     setSelectedDate(today);
     setSelectedMonth(today);
   };
@@ -410,7 +408,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
   };
 
   const getStaffName = (staffId: string) => {
-    const staffMember = staff.find(s => s.id === staffId);
+    const staffMember = staff.find(s => String(s.id) === String(staffId));
     return staffMember?.name || 'Nepoznat zaposleni';
   };
 
@@ -426,7 +424,117 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
 
   const dayNames = ['Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub', 'Ned'];
   const dayAppointments = getDayAppointments();
-  const hours = Array.from({ length: workingHoursEnd - workingHoursStart }, (_, i) => workingHoursStart + i);
+  const isAllStaffView = selectedStaff === 'all' && staff.length > 0;
+  const staffColumnMinWidth = 280;
+
+  const renderScheduleSlots = (staffId?: string) => {
+    const slots = generateTimeSlots(staffId);
+
+    if (slots.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <CalendarDays className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p>Nema radnog vremena za ovaj dan</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {slots.map((slot, index) => {
+          if (slot.type === 'free') {
+            return (
+              <div
+                key={`free-${staffId || 'selected'}-${index}`}
+                className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50"
+              >
+                <div className="flex-shrink-0 text-center">
+                  <div className="text-lg font-bold text-gray-600">{slot.startTime}</div>
+                  <div className="text-xs text-gray-500">{slot.endTime}</div>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-lg text-gray-600 mb-1">Slobodno vrijeme</div>
+                  <div className="text-sm text-gray-500">{slot.duration} minuta dostupno</div>
+                </div>
+
+                <div className="flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          const appointment = slot.data;
+          return (
+            <div
+              key={`appointment-${staffId || 'selected'}-${appointment.id}`}
+              onClick={() => handleAppointmentClick(appointment)}
+              className={`flex items-start gap-4 p-4 rounded-xl border-l-4 cursor-pointer hover:shadow-md transition-all ${getStatusColor(appointment.status)}`}
+            >
+              <div className="flex-shrink-0 text-center">
+                <div className="text-lg font-bold">{appointment.time}</div>
+                <div className="text-xs opacity-75">{formatTime(appointment.end_time)}</div>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-lg mb-1">{getServiceName(appointment)}</div>
+                <div className="text-sm opacity-90 mb-2">
+                  {formatTimeRange(appointment.time, appointment.end_time)} ({slot.duration} min)
+                </div>
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center gap-1">
+                    <span className="opacity-75">Klijent:</span>
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedClient({
+                          id: appointment.client_id ? String(appointment.client_id) : undefined,
+                          name: appointment.client_name,
+                          phone: appointment.client_phone,
+                          email: appointment.client_email
+                        });
+                        setShowClientModal(true);
+                      }}
+                      className="font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                    >
+                      {appointment.client_name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="opacity-75">Telefon:</span>
+                    <span className="font-medium">{appointment.client_phone}</span>
+                  </div>
+                  {selectedStaff === 'all' && !staffId && (
+                    <div className="flex items-center gap-1">
+                      <span className="opacity-75">Zaposleni:</span>
+                      <span className="font-medium">{getStaffName(appointment.staff_id)}</span>
+                    </div>
+                  )}
+                  {appointment.notes && (
+                    <div className="flex items-start gap-1 mt-2 pt-2 border-t border-gray-200">
+                      <span className="opacity-75">Napomena:</span>
+                      <span className="font-medium">{appointment.notes}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-white font-semibold">
+                  {appointment.client_name.charAt(0).toUpperCase()}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -477,7 +585,7 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
           <div className="flex items-center gap-2">
             <Filter className="w-5 h-5 text-gray-400" />
             <select
-              value={selectedStaff}
+              value={getSelectedStaffId()}
               onChange={(e) => setSelectedStaff(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
@@ -664,7 +772,36 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
             </div>
 
             {/* Timeline with Free Slots */}
-            <div className="p-6">
+            <div className={isAllStaffView ? 'p-4 sm:p-6 overflow-x-auto' : 'p-6'}>
+              {isAllStaffView ? (
+                <div
+                  className="grid gap-4"
+                  style={{
+                    gridTemplateColumns: `repeat(${staff.length}, minmax(${staffColumnMinWidth}px, 1fr))`,
+                    minWidth: `${staff.length * staffColumnMinWidth}px`
+                  }}
+                >
+                  {staff.map((staffMember) => {
+                    const staffId = String(staffMember.id);
+                    const staffAppointments = getDayAppointments(staffId);
+
+                    return (
+                      <div key={staffId} className="rounded-lg border bg-gray-50/50 overflow-hidden">
+                        <div className="sticky top-0 z-10 border-b bg-white px-4 py-3">
+                          <div className="font-semibold text-gray-900 truncate">{staffMember.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {staffAppointments.length} {staffAppointments.length === 1 ? 'termin' : 'termina'}
+                          </div>
+                        </div>
+                        <div className="p-3">
+                          {renderScheduleSlots(staffId)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <>
               {generateTimeSlots().length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <CalendarDays className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -785,6 +922,8 @@ export function SalonCalendarDayView({ onViewChange }: SalonCalendarDayViewProps
                     }
                   })}
                 </div>
+              )}
+                </>
               )}
             </div>
           </div>
