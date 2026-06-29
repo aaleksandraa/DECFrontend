@@ -268,6 +268,7 @@ export function SalonClients() {
         message: emailMessage,
       });
 
+      const queued = response.data?.queued ?? 0;
       const sent = response.data?.sent ?? 0;
       const failed = response.data?.failed ?? 0;
       const skippedNotClient = response.data?.skipped_not_client ?? 0;
@@ -275,15 +276,20 @@ export function SalonClients() {
       const skipped = skippedNotClient + skippedMissingEmail;
 
       setToast({
-        message: `Email poslato: ${sent}, neuspjelo: ${failed}, preskoceno: ${skipped}.`,
+        message: queued > 0
+          ? `Email kampanja zakazana: ${queued}, preskoceno: ${skipped}.`
+          : `Email poslato: ${sent}, neuspjelo: ${failed}, preskoceno: ${skipped}.`,
         type: 'success',
       });
 
       setShowEmailModal(false);
       clearEmailForm();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
-      setToast({ message: 'Greska pri slanju email-a.', type: 'error' });
+      setToast({
+        message: error?.response?.data?.message || 'Greska pri slanju email-a.',
+        type: 'error'
+      });
     } finally {
       setSendingEmail(false);
     }
