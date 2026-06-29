@@ -52,14 +52,11 @@ export const hasActiveSession = (): boolean => {
 };
 
 /**
- * Log session debug info (for development)
+ * Log session debug info.
+ *
+ * Intentionally a no-op: it previously dumped CSRF tokens and the full
+ * document.cookie to the console, which leaks sensitive auth material.
  */
 export const logSessionDebug = (): void => {
-  if (import.meta.env.DEV) {
-    console.log('🔐 Session Debug Info:');
-    console.log('  - Has CSRF Token:', hasCSRFToken());
-    console.log('  - Has Session Cookie:', hasSessionCookie());
-    console.log('  - CSRF Token:', getCookie('XSRF-TOKEN')?.substring(0, 20) + '...');
-    console.log('  - All Cookies:', document.cookie);
-  }
+  // Sensitive cookie/token logging removed.
 };

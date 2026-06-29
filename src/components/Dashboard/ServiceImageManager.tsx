@@ -9,7 +9,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
-import axios from 'axios';
+import api from '../../services/api';
 
 interface ServiceImage {
   id: number;
@@ -34,8 +34,6 @@ export const ServiceImageManager: React.FC<ServiceImageManagerProps> = ({
   const [editingImage, setEditingImage] = useState<ServiceImage | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', is_featured: false });
 
-  const API_URL = import.meta.env.VITE_API_URL;
-
   // Upload new image
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -59,8 +57,8 @@ export const ServiceImageManager: React.FC<ServiceImageManagerProps> = ({
     formData.append('image', file);
 
     try {
-      const response = await axios.post(
-        `${API_URL}/services/${serviceId}/images`,
+      const response = await api.post(
+        `/services/${serviceId}/images`,
         formData,
         {
           headers: {
@@ -86,7 +84,7 @@ export const ServiceImageManager: React.FC<ServiceImageManagerProps> = ({
     if (!confirm('Da li ste sigurni da želite da obrišete ovu sliku?')) return;
 
     try {
-      await axios.delete(`${API_URL}/services/${serviceId}/images/${imageId}`);
+      await api.delete(`/services/${serviceId}/images/${imageId}`);
       // Remove from state immediately - no alert
       setImages(images.filter((img) => img.id !== imageId));
     } catch (error: any) {
@@ -110,8 +108,8 @@ export const ServiceImageManager: React.FC<ServiceImageManagerProps> = ({
     if (!editingImage) return;
 
     try {
-      const response = await axios.put(
-        `${API_URL}/services/${serviceId}/images/${editingImage.id}`,
+      const response = await api.put(
+        `/services/${serviceId}/images/${editingImage.id}`,
         editForm
       );
 
@@ -148,7 +146,7 @@ export const ServiceImageManager: React.FC<ServiceImageManagerProps> = ({
     setImages(newImages.map((img, idx) => ({ ...img, order: idx + 1 })));
 
     try {
-      await axios.put(`${API_URL}/services/${serviceId}/images/reorder`, {
+      await api.put(`/services/${serviceId}/images/reorder`, {
         images: reorderedImages,
       });
     } catch (error: any) {

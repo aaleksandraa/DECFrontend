@@ -67,7 +67,8 @@
     loadingDates: false,
     step: 1,
     loading: true,
-    error: null
+    error: null,
+    bookingIdempotencyKey: null
   };
 
   // Computed colors based on config
@@ -195,6 +196,26 @@
     return 'rgba(' + (num >> 16) + ',' + ((num >> 8) & 0x00FF) + ',' + (num & 0x0000FF) + ',' + alpha + ')';
   }
 
+  function generateIdempotencyKey() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+
+    return 'frzn-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 11);
+  }
+
+  function resetBookingIdempotencyKey() {
+    state.bookingIdempotencyKey = null;
+  }
+
+  function ensureBookingIdempotencyKey() {
+    if (!state.bookingIdempotencyKey) {
+      state.bookingIdempotencyKey = generateIdempotencyKey();
+    }
+
+    return state.bookingIdempotencyKey;
+  }
+
 
   // API functions with retry logic
   function apiRequest(endpoint, options, retryCount) {
@@ -202,10 +223,10 @@
     retryCount = retryCount || 0;
     var maxRetries = 3;
     var url = config.apiUrl + endpoint;
-    var headers = {
+    var headers = Object.assign({
       'Content-Type': 'application/json',
       'X-Widget-Key': config.apiKey
-    };
+    }, options.headers || {});
     
     return fetch(url, {
       method: options.method || 'GET',
@@ -253,9 +274,17 @@
   }
 
   function createBooking(data) {
+    var idempotencyKey = ensureBookingIdempotencyKey();
+
     return apiRequest('/widget/book', {
       method: 'POST',
-      body: Object.assign({ api_key: config.apiKey }, data)
+      headers: {
+        'Idempotency-Key': idempotencyKey
+      },
+      body: Object.assign({
+        api_key: config.apiKey,
+        idempotency_key: idempotencyKey
+      }, data)
     });
   }
 
@@ -617,6 +646,7 @@
         } else {
           state.selectedServices.push(service);
         }
+        resetBookingIdempotencyKey();
         render();
       });
     });
@@ -626,6 +656,7 @@
       el.addEventListener('click', function() {
         var staffId = parseInt(this.getAttribute('data-staff-id'));
         state.selectedStaff = state.staff.find(function(s) { return s.id === staffId; });
+        resetBookingIdempotencyKey();
         render();
       });
     });
@@ -635,6 +666,7 @@
       el.addEventListener('click', function() {
         state.selectedDate = this.getAttribute('data-date');
         state.selectedTime = null;
+        resetBookingIdempotencyKey();
         state.availableSlots = [];
         state.loadingSlots = true;
         render();
@@ -662,6 +694,7 @@
     container.querySelectorAll('.frzn-time-item').forEach(function(el) {
       el.addEventListener('click', function() {
         state.selectedTime = this.getAttribute('data-time');
+        resetBookingIdempotencyKey();
         render();
       });
     });
@@ -745,6 +778,7 @@
           state.selectedDate = null;
           state.selectedTime = null;
           state.availableSlots = [];
+          resetBookingIdempotencyKey();
           loadDatesForMonth();
         } else {
           render();
@@ -790,6 +824,7 @@
           .then(function(data) {
             state.step = 6;
             state.bookingSuccess = true;
+            resetBookingIdempotencyKey();
             render();
           })
           .catch(function(err) {
@@ -800,6 +835,7 @@
             // Handle time slot taken error - redirect to time selection
             if (err.code === 'TIME_SLOT_TAKEN' || err.redirectToTime) {
               alert(err.message || 'Žao nam je, neko se u međuvremenu zakazao u to vrijeme. Molimo odaberite drugo vrijeme.');
+              resetBookingIdempotencyKey();
               // Reset time selection and reload available slots
               state.selectedTime = null;
               state.availableSlots = [];

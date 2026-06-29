@@ -10,6 +10,17 @@ interface FrizerReportModalProps {
   appointments: any[];
 }
 
+// Escape dynamic values before injecting them into the print window HTML to
+// prevent HTML/script injection (stored XSS) via names, services, notes, etc.
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export function FrizerReportModal({ isOpen, onClose, staff, appointments }: FrizerReportModalProps) {
   const [loading, setLoading] = useState(false);
   const [reportConfig, setReportConfig] = useState({
@@ -236,7 +247,7 @@ export function FrizerReportModal({ isOpen, onClose, staff, appointments }: Friz
         <body>
           <div class="header">
             <h1>Mjesečni izvještaj</h1>
-            <p>${staff.name} - ${StaffRoleLabels[staff.role as StaffRole] || staff.role}</p>
+            <p>${escapeHtml(staff.name)} - ${escapeHtml(StaffRoleLabels[staff.role as StaffRole] || staff.role)}</p>
           </div>
 
           <div class="period">
@@ -288,9 +299,9 @@ export function FrizerReportModal({ isOpen, onClose, staff, appointments }: Friz
                 <tbody>
                   ${stats.services.map(s => `
                     <tr>
-                      <td>${s.name}</td>
-                      <td>${s.count}</td>
-                      <td>${s.revenue.toFixed(2)} KM</td>
+                      <td>${escapeHtml(s.name)}</td>
+                      <td>${escapeHtml(s.count)}</td>
+                      <td>${escapeHtml(s.revenue.toFixed(2))} KM</td>
                     </tr>
                   `).join('')}
                 </tbody>
@@ -330,17 +341,17 @@ export function FrizerReportModal({ isOpen, onClose, staff, appointments }: Friz
               <tbody>
                 ${filtered.slice(0, 50).map(app => `
                   <tr>
-                    <td>${app.date}</td>
-                    <td>${app.time}</td>
-                    <td>${app.client_name || 'N/A'}</td>
-                    <td>${app.service?.name || 'N/A'}</td>
-                    <td>${app.total_price?.toFixed(2) || '0.00'} KM</td>
+                    <td>${escapeHtml(app.date)}</td>
+                    <td>${escapeHtml(app.time)}</td>
+                    <td>${escapeHtml(app.client_name || 'N/A')}</td>
+                    <td>${escapeHtml(app.service?.name || 'N/A')}</td>
+                    <td>${escapeHtml(app.total_price?.toFixed(2) || '0.00')} KM</td>
                     <td>
-                      <span class="status status-${app.status}">
+                      <span class="status status-${escapeHtml(app.status)}">
                         ${app.status === 'completed' ? 'Završeno' : 
                           app.status === 'cancelled' ? 'Otkazano' : 
                           app.status === 'confirmed' ? 'Potvrđeno' : 
-                          app.status === 'pending' ? 'Na čekanju' : app.status}
+                          app.status === 'pending' ? 'Na čekanju' : escapeHtml(app.status)}
                       </span>
                     </td>
                   </tr>

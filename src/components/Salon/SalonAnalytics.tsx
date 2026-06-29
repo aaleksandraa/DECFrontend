@@ -16,6 +16,18 @@ import { dashboardAPI, staffAPI } from '../../services/api';
 
 type PeriodOption = 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom';
 
+// Escape dynamic values before injecting them into the print window HTML.
+// Without this, data such as a client/service/staff name could inject markup
+// (stored XSS) into the generated report document.
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export function SalonAnalytics() {
   const { user } = useAuth();
   const [analytics, setAnalytics] = useState<any>(null);
@@ -169,7 +181,7 @@ export function SalonAnalytics() {
             <!DOCTYPE html>
             <html>
             <head>
-              <title>Izvještaj analitike - ${reportData.salonName}</title>
+              <title>Izvještaj analitike - ${escapeHtml(reportData.salonName)}</title>
               <style>
                 body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
                 h1 { color: #1f2937; border-bottom: 2px solid #f97316; padding-bottom: 10px; }
@@ -188,10 +200,10 @@ export function SalonAnalytics() {
             <body>
               <h1>📊 Izvještaj analitike salona</h1>
               <div class="info">
-                <p><strong>Salon:</strong> ${reportData.salonName}</p>
-                <p><strong>Period:</strong> ${reportData.period}</p>
-                <p><strong>Filter:</strong> ${reportData.staffFilter}</p>
-                <p><strong>Generisano:</strong> ${reportData.generatedAt}</p>
+                <p><strong>Salon:</strong> ${escapeHtml(reportData.salonName)}</p>
+                <p><strong>Period:</strong> ${escapeHtml(reportData.period)}</p>
+                <p><strong>Filter:</strong> ${escapeHtml(reportData.staffFilter)}</p>
+                <p><strong>Generisano:</strong> ${escapeHtml(reportData.generatedAt)}</p>
               </div>
               
               <h2>Statistika</h2>
@@ -221,7 +233,7 @@ export function SalonAnalytics() {
                   <tr><th>Usluga</th><th>Rezervacije</th><th>Prihod</th></tr>
                 </thead>
                 <tbody>
-                  ${reportData.topServices.map((s: any) => `<tr><td>${s.name}</td><td>${s.bookings}</td><td>${s.revenue} KM</td></tr>`).join('')}
+                  ${reportData.topServices.map((s: any) => `<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.bookings)}</td><td>${escapeHtml(s.revenue)} KM</td></tr>`).join('')}
                 </tbody>
               </table>
               ` : '<p style="color: #6b7280; padding: 20px 0;">Nema podataka o uslugama za odabrani period</p>'}
@@ -233,7 +245,7 @@ export function SalonAnalytics() {
                   <tr><th>Ime</th><th>Termini</th><th>Prihod</th><th>Ocjena</th></tr>
                 </thead>
                 <tbody>
-                  ${reportData.topStaff.map((s: any) => `<tr><td>${s.name}</td><td>${s.bookings}</td><td>${s.revenue} KM</td><td>⭐ ${s.rating}</td></tr>`).join('')}
+                  ${reportData.topStaff.map((s: any) => `<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.bookings)}</td><td>${escapeHtml(s.revenue)} KM</td><td>⭐ ${escapeHtml(s.rating)}</td></tr>`).join('')}
                 </tbody>
               </table>
               ` : ''}
@@ -244,7 +256,7 @@ export function SalonAnalytics() {
                   <tr><th>Vrijeme</th><th>Broj termina</th><th>Zauzetost</th></tr>
                 </thead>
                 <tbody>
-                  ${reportData.timeSlots.map((s: any) => `<tr><td>${s.time}</td><td>${s.bookings}</td><td>${s.percentage}%</td></tr>`).join('')}
+                  ${reportData.timeSlots.map((s: any) => `<tr><td>${escapeHtml(s.time)}</td><td>${escapeHtml(s.bookings)}</td><td>${escapeHtml(s.percentage)}%</td></tr>`).join('')}
                 </tbody>
               </table>
               

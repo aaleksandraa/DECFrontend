@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus } from 'lucide-react';
-import axios from 'axios';
 import { format, addDays, isSameDay, addMonths, subMonths, addYears, subYears } from 'date-fns';
 import { sr } from 'date-fns/locale';
 import { MultiServiceManualBookingModal } from '../Common/MultiServiceManualBookingModal';
+import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 interface Staff {
   id: number;
@@ -41,6 +42,7 @@ interface DayAvailability {
 }
 
 export default function SalonCalendarModernView() {
+  const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedStaff, setSelectedStaff] = useState<number | 'all'>('all');
@@ -57,15 +59,13 @@ export default function SalonCalendarModernView() {
   const daysToShow = 14; // Show 2 weeks
 
   useEffect(() => {
-    const initializeData = async () => {
-      const storedSalonId = localStorage.getItem('salon_id');
-      if (storedSalonId) {
-        setSalonId(Number(storedSalonId));
-        await fetchStaff();
-      }
-    };
-    initializeData();
-  }, []);
+    const resolvedSalonId = (user as any)?.salon?.id;
+    if (resolvedSalonId) {
+      setSalonId(Number(resolvedSalonId));
+      fetchStaff(Number(resolvedSalonId));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   useEffect(() => {
     // Debounce API calls to prevent rate limiting
@@ -77,25 +77,18 @@ export default function SalonCalendarModernView() {
     return () => clearTimeout(timer);
   }, [selectedDate, selectedStaff]);
 
-  const fetchStaff = async () => {
+  const fetchStaff = async (resolvedSalonId?: number) => {
     try {
-      const salonId = localStorage.getItem('salon_id');
-      console.log('Fetching staff for salon:', salonId);
-      
-      if (!salonId) {
-        console.error('No salon_id in localStorage');
+      const targetSalonId = resolvedSalonId ?? salonId;
+      if (!targetSalonId) {
         return;
       }
-      
-      const response = await axios.get(`/api/v1/salons/${salonId}/staff`);
-      console.log('Staff response:', response.data);
-      
+
+      const response = await api.get(`/salons/${targetSalonId}/staff`);
       const staffData = response.data.data || [];
-      console.log('Total staff:', staffData.length);
-      
       setStaff(staffData);
-    } catch (error) {
-      console.error('Error fetching staff:', error);
+    } catch {
+      console.error('Error fetching staff');
     }
   };
 
@@ -108,28 +101,12 @@ export default function SalonCalendarModernView() {
       if (selectedStaff !== 'all') {
         params.staff_id = selectedStaff;
       }
-      
-      console.log('Fetching appointments for:', params);
-      const response = await axios.get('/api/v1/appointments', { params });
-      console.log('Appointments response:', response.data);
-      console.log('Total appointments:', response.data.data?.length || 0);
-      
+
+      const response = await api.get('/appointments', { params });
       const appointmentsData = response.data.data || [];
       setAppointments(appointmentsData);
-      
-      // Log each appointment
-      appointmentsData.forEach((apt: any, index: number) => {
-        console.log(`Appointment ${index + 1}:`, {
-          client: apt.client_name,
-          service: apt.service_name,
-          start: apt.start_time || apt.appointment_time || apt.time,
-          end: apt.end_time,
-          staff: apt.staff_name,
-          raw: apt // Log full object to see all fields
-        });
-      });
-    } catch (error) {
-      console.error('Error fetching appointments:', error);
+    } catch {
+      console.error('Error fetching appointments');
     } finally {
       setLoading(false);
     }
@@ -139,19 +116,16 @@ export default function SalonCalendarModernView() {
     try {
       // Start from today, not 7 days before
       const today = new Date();
-      
+
       // Use single API call for the entire month instead of 14 separate calls
       const month = format(selectedDate, 'yyyy-MM');
-      console.log('Fetching availability for month:', month);
-      
-      const response = await axios.get('/api/v1/appointments/capacity/month', {
+
+      const response = await api.get('/appointments/capacity/month', {
         params: {
           month,
           staff_id: selectedStaff !== 'all' ? selectedStaff : undefined,
         },
       });
-
-      console.log('Availability response:', response.data);
 
       // Backend returns 'capacity' not 'days'
       const capacityData = response.data.capacity || response.data.days || [];
@@ -162,9 +136,7 @@ export default function SalonCalendarModernView() {
         const date = addDays(today, i);
         const dayStr = format(date, 'yyyy-MM-dd');
         const dayData = capacityData.find((d: any) => d.date === dayStr);
-        
-        console.log(`Day ${dayStr}:`, dayData);
-        
+
         availability.push({
           date: dayStr,
           available_slots: dayData?.free_slots || dayData?.available_slots || 0,
@@ -174,11 +146,10 @@ export default function SalonCalendarModernView() {
             : 0,
         });
       }
-      
-      console.log('Processed availability:', availability);
+
       setDayAvailability(availability);
-    } catch (error) {
-      console.error('Error fetching availability:', error);
+    } catch {
+      console.error('Error fetching availability');
     }
   };
 
@@ -229,23 +200,18 @@ export default function SalonCalendarModernView() {
     const filtered = appointments.filter(apt => {
       // API returns 'time' (start) and 'end_time' as strings like "16:30"
       const timeStr = apt.time || apt.start_time || apt.appointment_time;
-      
+
       if (!timeStr) {
-        console.warn('Appointment missing time fields:', apt);
         return false;
       }
-      
+
       // Parse time strings (format: "HH:mm")
       const [startHour] = timeStr.split(':').map(Number);
-      
+
       // Include appointment if it starts in this hour
       return startHour === hour;
     });
-    
-    if (filtered.length > 0) {
-      console.log(`Hour ${hour}:00 - Found ${filtered.length} appointments:`, filtered);
-    }
-    
+
     return filtered;
   };
 

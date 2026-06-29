@@ -57,15 +57,12 @@ export function Header({ title, onMenuToggle }: HeaderProps) {
     
     try {
       setLoading(true);
-      console.log('Loading notifications...');
       const response = await notificationAPI.getNotifications({ per_page: 10 });
-      console.log('Notifications response:', response);
       // Handle paginated response
       const notificationData = response.data || response;
-      console.log('Notification data:', notificationData);
       setNotifications(Array.isArray(notificationData) ? notificationData : []);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
+    } catch {
+      console.error('Error loading notifications');
       setNotifications([]);
     } finally {
       setLoading(false);

@@ -39,6 +39,7 @@ interface SuccessModalProps {
     };
     total_price: number;
     client_email?: string;
+    ics_url?: string;
   };
 }
 
@@ -71,17 +72,27 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, appointmen
   const handleDownloadIcs = async () => {
     setIsDownloading(true);
     try {
-      const blob = await publicAPI.downloadIcs(appointment.id);
-
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `termin-${appointment.id}.ics`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      // The backend issues a signed, time-limited ICS link in the appointment
+      // payload. Use it directly so the (now signed-protected) endpoint accepts
+      // the request. The server sends Content-Disposition: attachment.
+      if (appointment.ics_url) {
+        const link = document.createElement('a');
+        link.href = appointment.ics_url;
+        link.setAttribute('download', `termin-${appointment.id}.ics`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } else {
+        const blob = await publicAPI.downloadIcs(appointment.id);
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `termin-${appointment.id}.ics`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      }
     } catch (error) {
       console.error('Error downloading ICS file:', error);
       alert('Greška pri preuzimanju kalendar fajla. Molimo pokušajte ponovo.');

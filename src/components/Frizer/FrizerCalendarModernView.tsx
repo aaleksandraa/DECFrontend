@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus } from 'lucide-react';
-import axios from 'axios';
 import { format, addDays, isSameDay, parseISO, addMonths, subMonths, addYears, subYears } from 'date-fns';
 import { sr } from 'date-fns/locale';
 import { MultiServiceManualBookingModal } from '../Common/MultiServiceManualBookingModal';
+import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 interface Appointment {
   id: number;
@@ -32,6 +33,7 @@ interface DayAvailability {
 }
 
 export default function FrizerCalendarModernView() {
+  const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -46,16 +48,12 @@ export default function FrizerCalendarModernView() {
 
   const daysToShow = 14; // Show 2 weeks
 
-  // Remove scroll on mount - first day is today
+  // Derive salon/staff identifiers from the authenticated staff profile.
   useEffect(() => {
-    const initializeData = async () => {
-      const storedSalonId = localStorage.getItem('salon_id');
-      const storedStaffId = localStorage.getItem('staff_id');
-      if (storedSalonId) setSalonId(Number(storedSalonId));
-      if (storedStaffId) setStaffId(Number(storedStaffId));
-    };
-    initializeData();
-  }, []);
+    const profile = (user as any)?.staff_profile;
+    if (profile?.salon_id) setSalonId(Number(profile.salon_id));
+    if (profile?.id) setStaffId(Number(profile.id));
+  }, [user]);
 
   useEffect(() => {
     // Debounce API calls to prevent rate limiting
@@ -73,10 +71,10 @@ export default function FrizerCalendarModernView() {
       const params = {
         date: format(selectedDate, 'yyyy-MM-dd'),
       };
-      const response = await axios.get('/api/v1/appointments', { params });
+      const response = await api.get('/appointments', { params });
       setAppointments(response.data.data || []);
-    } catch (error) {
-      console.error('Error fetching appointments:', error);
+    } catch {
+      console.error('Error fetching appointments');
     } finally {
       setLoading(false);
     }
@@ -89,7 +87,7 @@ export default function FrizerCalendarModernView() {
       
       // Use single API call for the entire month instead of 14 separate calls
       const month = format(selectedDate, 'yyyy-MM');
-      const response = await axios.get('/api/v1/appointments/capacity/month', {
+      const response = await api.get('/appointments/capacity/month', {
         params: {
           month,
         },
@@ -116,8 +114,8 @@ export default function FrizerCalendarModernView() {
       }
       
       setDayAvailability(availability);
-    } catch (error) {
-      console.error('Error fetching availability:', error);
+    } catch {
+      console.error('Error fetching availability');
     }
   };
 

@@ -861,13 +861,13 @@ export const adminAPI = {
     return response.data;
   },
 
-  resetUserPassword: async (id: string) => {
-    const response = await api.post(`/admin/users/${id}/reset-password`);
+  resetUserPassword: async (id: string, payload?: { send_email?: boolean }) => {
+    const response = await api.post(`/admin/users/${id}/reset-password`, payload ?? {});
     return response.data;
   },
 
-  sendMessageToUser: async (id: string, message: string) => {
-    const response = await api.post(`/admin/users/${id}/message`, { message });
+  sendMessageToUser: async (id: string, payload: { title?: string; message: string }) => {
+    const response = await api.post(`/admin/users/${id}/message`, payload);
     return response.data;
   },
   
